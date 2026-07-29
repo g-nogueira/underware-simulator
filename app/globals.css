@@ -605,6 +605,12 @@ button.primary:hover {
   cursor: move;
 }
 
+.route-point.selected {
+  fill: var(--blue);
+  stroke: white;
+  stroke-width: 5;
+}
+
 .selection-outline {
   fill: none;
   stroke: var(--blue);
@@ -780,6 +786,36 @@ button.primary:hover {
   font-size: 14px;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.selection-name {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 7px;
+}
+
+.selection-name input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  border-bottom: 1px solid transparent;
+  outline: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.selection-name input:hover,
+.selection-name input:focus {
+  border-bottom-color: var(--blue);
+}
+
+.selection-name > span:last-child {
+  color: var(--muted);
+  font-size: 11px;
 }
 
 .selection-type {
@@ -1049,6 +1085,48 @@ button.primary:hover {
 
 .route-fields {
   grid-template-columns: 1fr;
+}
+
+.bend-selection {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 12px;
+  padding: 10px;
+  border: 1px solid rgba(21, 151, 255, 0.36);
+  border-radius: 8px;
+  background: rgba(21, 151, 255, 0.09);
+}
+
+.bend-selection > span {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.bend-selection strong {
+  color: var(--text);
+  font-size: 11px;
+}
+
+.bend-selection button {
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid rgba(255, 101, 101, 0.45);
+  border-radius: 7px;
+  background: transparent;
+  color: #ff9393;
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.bend-selection button:hover {
+  background: rgba(255, 101, 101, 0.1);
 }
 
 .empty-selection {
