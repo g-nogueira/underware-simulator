@@ -16,6 +16,7 @@ import {
   getPowerBrickOutletLayout,
   insertRouteBend,
   moveRoutePoint,
+  removeRouteBend,
   resizeItemFromCorner,
   snapToGrid,
   translateRoute,
@@ -293,6 +294,10 @@ export default function Home() {
   const [routes, setRoutes] = useState<CableRoute[]>(INITIAL_ROUTES);
   const [selectedId, setSelectedId] = useState("channel-middle");
   const [selectedRouteId, setSelectedRouteId] = useState("");
+  const [selectedRoutePoint, setSelectedRoutePoint] = useState<{
+    routeId: string;
+    pointIndex: number;
+  } | null>(null);
   const [zoom, setZoom] = useState(88);
   const [printOpen, setPrintOpen] = useState(false);
   const [deskOpen, setDeskOpen] = useState(false);
@@ -308,10 +313,25 @@ export default function Home() {
   const past = useRef<PlanSnapshot[]>([]);
   const future = useRef<PlanSnapshot[]>([]);
   const traceIdRef = useRef("starting");
+  const nameEdit = useRef<{
+    type: "item" | "route";
+    id: string;
+    original: string;
+    recorded: boolean;
+  } | null>(null);
 
   const selected = items.find((item) => item.id === selectedId) ?? null;
   const selectedRoute =
     routes.find((route) => route.id === selectedRouteId) ?? null;
+  const selectedRoutePointIndex =
+    selectedRoutePoint?.routeId === selectedRouteId
+      ? selectedRoutePoint.pointIndex
+      : null;
+  const selectedRoutePointIsBend =
+    selectedRoute !== null &&
+    selectedRoutePointIndex !== null &&
+    selectedRoutePointIndex > 0 &&
+    selectedRoutePointIndex < selectedRoute.points.length - 1;
   const systemSpec = SYSTEMS[system];
   const capacity = selected?.kind === "channel" ? selected.cables ?? 0 : 0;
   const capacityState = getCapacityState(capacity, systemSpec.capacity) as {
@@ -356,6 +376,7 @@ export default function Home() {
             setRoutes(result.plan.routes);
             setSelectedId(result.plan.items[0]?.id ?? "");
             setSelectedRouteId("");
+            setSelectedRoutePoint(null);
             setSavedAt(result.plan.savedAt ?? "restored");
           }
         } catch {
@@ -434,6 +455,7 @@ export default function Home() {
     setSelectedRouteId((current) =>
       value.routes.some((route) => route.id === current) ? current : "",
     );
+    setSelectedRoutePoint(null);
   }
 
   function checkpointHistory() {
@@ -508,6 +530,7 @@ export default function Home() {
       setRoutes((current) => [...current, nextRoute]);
       setSelectedId("");
       setSelectedRouteId(nextRoute.id);
+      setSelectedRoutePoint(null);
       showToast(`Cable route ${index} added`);
       emitLog("route.added", { route: index });
       setActiveTool("select");
@@ -532,6 +555,7 @@ export default function Home() {
     setItems((current) => [...current, next]);
     setSelectedId(next.id);
     setSelectedRouteId("");
+    setSelectedRoutePoint(null);
     setActiveTool("select");
     showToast(`${next.name} added — drag it into place`);
     emitLog("item.added", { itemId: next.id, kind });
@@ -546,6 +570,64 @@ export default function Home() {
       ),
     );
     emitLog("item.updated", { itemId: selected.id, ...patch });
+  }
+
+  function beginSelectionNameEdit() {
+    if (selected) {
+      nameEdit.current = {
+        type: "item",
+        id: selected.id,
+        original: selected.name,
+        recorded: false,
+      };
+    } else if (selectedRoute) {
+      nameEdit.current = {
+        type: "route",
+        id: selectedRoute.id,
+        original: selectedRoute.name,
+        recorded: false,
+      };
+    }
+  }
+
+  function changeSelectionName(name: string) {
+    const edit = nameEdit.current;
+    if (!edit) return;
+    if (!edit.recorded) {
+      checkpointHistory();
+      edit.recorded = true;
+    }
+
+    if (edit.type === "item") {
+      setItems((current) =>
+        current.map((item) =>
+          item.id === edit.id ? { ...item, name } : item,
+        ),
+      );
+    } else {
+      setRoutes((current) =>
+        current.map((route) =>
+          route.id === edit.id ? { ...route, name } : route,
+        ),
+      );
+    }
+  }
+
+  function finishSelectionNameEdit() {
+    const edit = nameEdit.current;
+    if (!edit) return;
+    const currentName =
+      edit.type === "item"
+        ? items.find((item) => item.id === edit.id)?.name
+        : routes.find((route) => route.id === edit.id)?.name;
+    if (edit.recorded && currentName !== undefined && currentName !== edit.original) {
+      emitLog(`${edit.type}.renamed`, {
+        [`${edit.type}Id`]: edit.id,
+        from: edit.original,
+        to: currentName,
+      });
+    }
+    nameEdit.current = null;
   }
 
   function rotateSelected(rotation: PlannerItem["rotation"]) {
@@ -593,6 +675,7 @@ export default function Home() {
     };
     setSelectedId(item.id);
     setSelectedRouteId("");
+    setSelectedRoutePoint(null);
   }
 
   function handleResizePointerDown(
@@ -612,6 +695,7 @@ export default function Home() {
     };
     setSelectedId(item.id);
     setSelectedRouteId("");
+    setSelectedRoutePoint(null);
   }
 
   function handleRoutePointerDown(
@@ -637,6 +721,7 @@ export default function Home() {
     };
     setSelectedId("");
     setSelectedRouteId(route.id);
+    setSelectedRoutePoint(null);
   }
 
   function handleRoutePointPointerDown(
@@ -651,6 +736,7 @@ export default function Home() {
     interaction.current = { type: "route-point", id: routeId, pointIndex };
     setSelectedId("");
     setSelectedRouteId(routeId);
+    setSelectedRoutePoint({ routeId, pointIndex });
   }
 
   function handlePointerMove(event: ReactPointerEvent<SVGSVGElement>) {
@@ -821,6 +907,7 @@ export default function Home() {
       setRoutes(plan.routes);
       setSelectedId(plan.items[0]?.id ?? "");
       setSelectedRouteId("");
+      setSelectedRoutePoint(null);
       showToast("Plan imported");
       emitLog("plan.imported", {
         fileName: file.name,
@@ -841,6 +928,7 @@ export default function Home() {
     setItems((current) => current.filter((item) => item.id !== selected.id));
     setSelectedId("");
     setSelectedRouteId("");
+    setSelectedRoutePoint(null);
     showToast(`${selected.name} removed`);
     emitLog("item.deleted", { itemId: selected.id, kind: selected.kind });
   }
@@ -882,6 +970,9 @@ export default function Home() {
     checkpointHistory();
     setRoutes((current) => current.filter((route) => route.id !== routeId));
     setSelectedRouteId((current) => (current === routeId ? "" : current));
+    setSelectedRoutePoint((current) =>
+      current?.routeId === routeId ? null : current,
+    );
     emitLog("route.deleted", { routeId });
   }
 
@@ -906,7 +997,29 @@ export default function Home() {
         entry.id === route.id ? { ...entry, points } : entry,
       ),
     );
+    setSelectedRoutePoint(null);
     emitLog("route.bend_added", { routeId: route.id, points: points.length });
+  }
+
+  function removeSelectedBend() {
+    if (!selectedRoute || !selectedRoutePointIsBend) return;
+    checkpointHistory();
+    const points = removeRouteBend(
+      selectedRoute.points,
+      selectedRoutePointIndex,
+    ) as CableRoute["points"];
+    setRoutes((current) =>
+      current.map((route) =>
+        route.id === selectedRoute.id ? { ...route, points } : route,
+      ),
+    );
+    setSelectedRoutePoint(null);
+    showToast("Cable bend removed");
+    emitLog("route.bend_removed", {
+      routeId: selectedRoute.id,
+      pointIndex: selectedRoutePointIndex,
+      points: points.length,
+    });
   }
 
   function exportTrace() {
@@ -1093,6 +1206,7 @@ export default function Home() {
               onPointerDown={() => {
                 setSelectedId("");
                 setSelectedRouteId("");
+                setSelectedRoutePoint(null);
               }}
             >
               <defs>
@@ -1199,6 +1313,8 @@ export default function Home() {
                   onKeyDown={(event) => {
                     if (event.key === "Enter" || event.key === " ") {
                       setSelectedId(item.id);
+                      setSelectedRouteId("");
+                      setSelectedRoutePoint(null);
                     }
                   }}
                 >
@@ -1329,7 +1445,9 @@ export default function Home() {
                       cx={x}
                       cy={y}
                       r="10"
-                      className="route-point"
+                      className={`route-point ${
+                        selectedRoutePointIndex === index ? "selected" : ""
+                      }`}
                       onPointerDown={(event) =>
                         handleRoutePointPointerDown(
                           event,
@@ -1337,7 +1455,11 @@ export default function Home() {
                           index,
                         )
                       }
-                      aria-label={`Move ${selectedRoute.name} point ${index + 1}`}
+                      aria-label={
+                        index > 0 && index < selectedRoute.points.length - 1
+                          ? `Select or move ${selectedRoute.name} bend ${index}`
+                          : `Move ${selectedRoute.name} endpoint ${index + 1}`
+                      }
                     />
                   ))}
                 </g>
@@ -1421,9 +1543,23 @@ export default function Home() {
         <div className="inspector-header">
           <div>
             <span className="eyebrow">Selection</span>
-            <strong>
-              {selected?.name ?? selectedRoute?.name ?? "Nothing selected"}
-            </strong>
+            {selected || selectedRoute ? (
+              <label className="selection-name">
+                <span className="sr-only">Selection name</span>
+                <input
+                  value={selected?.name ?? selectedRoute?.name ?? ""}
+                  onFocus={beginSelectionNameEdit}
+                  onChange={(event) => changeSelectionName(event.target.value)}
+                  onBlur={finishSelectionNameEdit}
+                  aria-label={`Rename ${
+                    selected?.name ?? selectedRoute?.name ?? "selection"
+                  }`}
+                />
+                <span aria-hidden="true">✎</span>
+              </label>
+            ) : (
+              <strong>Nothing selected</strong>
+            )}
           </div>
           {(selected || selectedRoute) && (
             <span className="selection-type">
@@ -1448,8 +1584,32 @@ export default function Home() {
               </div>
               <p>
                 Drag the cable line to move the whole route. Drag a blue point
-                to change its start, end, or bends.
+                to change its start, end, or bends. Click a bend to select it
+                for removal.
               </p>
+              {selectedRoutePointIndex !== null && (
+                <div className="bend-selection">
+                  <span>
+                    <strong>
+                      {selectedRoutePointIsBend
+                        ? `Bend ${selectedRoutePointIndex}`
+                        : "Route endpoint"}
+                    </strong>
+                    {selectedRoutePointIsBend
+                      ? "Selected control point"
+                      : "Endpoints cannot be removed"}
+                  </span>
+                  {selectedRoutePointIsBend && (
+                    <button
+                      type="button"
+                      className="danger"
+                      onClick={removeSelectedBend}
+                    >
+                      Remove bend
+                    </button>
+                  )}
+                </div>
+              )}
             </section>
             <section className="inspector-section">
               <h2>Cable</h2>
@@ -1652,6 +1812,8 @@ export default function Home() {
                   };
                   setItems((current) => [...current, copy]);
                   setSelectedId(copy.id);
+                  setSelectedRouteId("");
+                  setSelectedRoutePoint(null);
                   emitLog("item.duplicated", {
                     sourceId: selected.id,
                     itemId: copy.id,
@@ -1686,6 +1848,7 @@ export default function Home() {
                 onClick={() => {
                   setSelectedId("");
                   setSelectedRouteId(route.id);
+                  setSelectedRoutePoint(null);
                 }}
               >
                 <i style={{ background: route.color }} aria-hidden="true" />
