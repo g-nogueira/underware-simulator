@@ -9,6 +9,7 @@ import {
   getPowerBrickOutletLayout,
   insertRouteBend,
   moveRoutePoint,
+  removeRouteBend,
   resizeItemFromCorner,
   snapToGrid,
   translateRoute,
@@ -74,6 +75,33 @@ test("calculates route length and inserts a bend in its longest segment", () => 
     [100, 0],
     [100, 50],
   ]);
+});
+
+test("removes only intermediate route bends", () => {
+  const points = [
+    [0, 0],
+    [50, 0],
+    [100, 0],
+    [100, 50],
+  ];
+
+  assert.deepEqual(removeRouteBend(points, 1), [
+    [0, 0],
+    [100, 0],
+    [100, 50],
+  ]);
+  assert.equal(removeRouteBend(points, 0), points);
+  assert.equal(removeRouteBend(points, points.length - 1), points);
+  assert.equal(
+    removeRouteBend(
+      [
+        [0, 0],
+        [100, 0],
+      ],
+      1,
+    ).length,
+    2,
+  );
 });
 
 test("resizes an item from every corner while preserving the opposite corner", () => {
