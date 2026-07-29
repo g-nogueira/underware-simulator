@@ -24,6 +24,45 @@ export function getCapacityState(
   remaining: number;
 };
 
+export function getPowerBrickOutletLayout(
+  width: number,
+  height: number,
+  outletCount: number,
+): Array<{ x: number; y: number; radius: number }>;
+
+export function calculateRouteLength(
+  points: Array<[number, number]>,
+): number;
+
+export function insertRouteBend(
+  points: Array<[number, number]>,
+): Array<[number, number]>;
+
+export function resizeItemFromCorner(
+  item: { x: number; y: number; width: number; height: number },
+  corner: "nw" | "ne" | "sw" | "se",
+  pointer: { x: number; y: number },
+  desk: { width: number; depth: number },
+  gridSize: number,
+  minimumSize?: { width: number; height: number },
+): { x: number; y: number; width: number; height: number };
+
+export function translateRoute(
+  points: Array<[number, number]>,
+  deltaX: number,
+  deltaY: number,
+  desk: { width: number; depth: number },
+  gridSize: number,
+): Array<[number, number]>;
+
+export function moveRoutePoint(
+  points: Array<[number, number]>,
+  pointIndex: number,
+  pointer: { x: number; y: number },
+  desk: { width: number; depth: number },
+  gridSize: number,
+): Array<[number, number]>;
+
 export function calculatePrintPlan(
   items: Array<{
     id: string;
