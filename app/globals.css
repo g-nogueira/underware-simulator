@@ -563,10 +563,6 @@ button.primary:hover {
   text-transform: uppercase;
 }
 
-.route {
-  pointer-events: none;
-}
-
 .route polyline {
   fill: none;
   stroke-linecap: round;
@@ -574,9 +570,39 @@ button.primary:hover {
   vector-effect: non-scaling-stroke;
 }
 
+.route-hit {
+  pointer-events: stroke;
+  stroke: transparent;
+  stroke-width: 32;
+  cursor: grab;
+}
+
+.route-hit:active {
+  cursor: grabbing;
+}
+
 .route-halo {
   stroke: rgba(2, 7, 11, 0.8);
   stroke-width: 18;
+  pointer-events: none;
+}
+
+.route > polyline:not(.route-hit) {
+  pointer-events: none;
+}
+
+.route-selection {
+  stroke: var(--blue);
+  stroke-width: 2;
+  stroke-dasharray: 7 7;
+}
+
+.route-point {
+  fill: white;
+  stroke: var(--blue);
+  stroke-width: 4;
+  vector-effect: non-scaling-stroke;
+  cursor: move;
 }
 
 .selection-outline {
@@ -591,6 +617,17 @@ button.primary:hover {
   stroke: var(--blue);
   stroke-width: 3;
   vector-effect: non-scaling-stroke;
+  pointer-events: all;
+}
+
+.resize-nw,
+.resize-se {
+  cursor: nwse-resize;
+}
+
+.resize-ne,
+.resize-sw {
+  cursor: nesw-resize;
 }
 
 .canvas-controls {
@@ -929,6 +966,13 @@ button.primary:hover {
   gap: 8px;
   min-height: 40px;
   border-bottom: 1px solid rgba(48, 70, 90, 0.42);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.route-list > div.active {
+  background: rgba(21, 151, 255, 0.1);
+  box-shadow: inset 2px 0 0 var(--blue);
 }
 
 .route-list > div > i {
@@ -974,6 +1018,37 @@ button.primary:hover {
 
 .route-list button:hover {
   color: var(--danger);
+}
+
+.route-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.route-stats span {
+  display: flex;
+  min-height: 60px;
+  flex-direction: column;
+  justify-content: center;
+  gap: 5px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #08131e;
+  color: var(--muted);
+  font-size: 9px;
+  text-transform: uppercase;
+}
+
+.route-stats strong {
+  color: var(--text);
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 11px;
+}
+
+.route-fields {
+  grid-template-columns: 1fr;
 }
 
 .empty-selection {
