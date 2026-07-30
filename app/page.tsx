@@ -10,6 +10,8 @@ import {
 } from "react";
 import {
   SYSTEM_SPECS,
+  buildLayerStack,
+  calculateGridTilePlan,
   calculateRouteLength,
   calculatePrintPlan,
   getCapacityState,
@@ -17,6 +19,7 @@ import {
   insertRouteBend,
   moveRoutePoint,
   removeRouteBend,
+  reorderLayerStack,
   resizeItemFromCorner,
   snapToGrid,
   translateRoute,
@@ -26,12 +29,28 @@ import {
 type SystemId = "openGrid" | "underware";
 type ToolId =
   | "select"
-  | "channel"
+  | "grid"
+  | "parts"
   | "route"
+  | "obstacle";
+type ItemKind =
+  | "grid"
+  | "channel"
+  | "cable-loop"
   | "power-brick"
   | "holder"
   | "obstacle";
-type ItemKind = "channel" | "power-brick" | "holder" | "obstacle";
+type CatalogItemId =
+  | "opengrid-baseplate"
+  | "straight-channel"
+  | "l-channel"
+  | "t-channel"
+  | "x-channel"
+  | "s-channel"
+  | "cable-loop"
+  | "device-holder"
+  | "power-brick-mount";
+type LayerMovement = "back" | "backward" | "forward" | "front";
 
 type PlannerItem = {
   id: string;
@@ -44,6 +63,10 @@ type PlannerItem = {
   rotation: 0 | 90 | 180 | 270;
   cables?: number;
   outlets?: number;
+  catalogId?: CatalogItemId;
+  layer?: number;
+  maxTileCellsX?: number;
+  maxTileCellsY?: number;
 };
 
 type CableRoute = {
@@ -52,6 +75,7 @@ type CableRoute = {
   color: string;
   points: Array<[number, number]>;
   diameter: number;
+  layer?: number;
 };
 
 type PlanFile = {
@@ -110,11 +134,134 @@ const SYSTEMS = {
 
 const TOOLS: Array<{ id: ToolId; icon: string; label: string }> = [
   { id: "select", icon: "↖", label: "Select" },
-  { id: "channel", icon: "▣", label: "Channel" },
+  { id: "grid", icon: "▦", label: "openGrid" },
+  { id: "parts", icon: "＋", label: "Parts" },
   { id: "route", icon: "⌁", label: "Cable route" },
-  { id: "power-brick", icon: "▯", label: "Power brick" },
-  { id: "holder", icon: "⊔", label: "Device holder" },
   { id: "obstacle", icon: "▧", label: "Obstacle" },
+];
+
+const ROUTE_COLORS = [
+  "#56d7e4",
+  "#5294ff",
+  "#9f7aea",
+  "#f973c8",
+  "#ffb020",
+  "#39d98a",
+  "#ff6b6b",
+] as const;
+
+type CatalogItem = {
+  id: CatalogItemId;
+  kind: Exclude<ItemKind, "obstacle">;
+  name: string;
+  icon: string;
+  category: "Foundation" | "Cable routing" | "Mounts";
+  description: string;
+  widthCells: number;
+  heightCells: number;
+  openGridOnly?: boolean;
+  cables?: number;
+  outlets?: number;
+};
+
+const PART_CATALOG: CatalogItem[] = [
+  {
+    id: "opengrid-baseplate",
+    kind: "grid",
+    name: "openGrid baseplate",
+    icon: "▦",
+    category: "Foundation",
+    description: "Resizable coverage area split into printable grid tiles.",
+    widthCells: 8,
+    heightCells: 8,
+    openGridOnly: true,
+  },
+  {
+    id: "straight-channel",
+    kind: "channel",
+    name: "Straight channel",
+    icon: "━",
+    category: "Cable routing",
+    description: "Parametric I channel for a straight cable run.",
+    widthCells: 6,
+    heightCells: 2,
+    cables: 0,
+  },
+  {
+    id: "l-channel",
+    kind: "channel",
+    name: "L corner channel",
+    icon: "┗",
+    category: "Cable routing",
+    description: "A 90° corner joining two perpendicular runs.",
+    widthCells: 4,
+    heightCells: 4,
+    cables: 0,
+  },
+  {
+    id: "t-channel",
+    kind: "channel",
+    name: "T junction channel",
+    icon: "┳",
+    category: "Cable routing",
+    description: "A three-way branch for splitting a route.",
+    widthCells: 4,
+    heightCells: 4,
+    cables: 0,
+  },
+  {
+    id: "x-channel",
+    kind: "channel",
+    name: "X junction channel",
+    icon: "╋",
+    category: "Cable routing",
+    description: "A four-way crossing for intersecting runs.",
+    widthCells: 4,
+    heightCells: 4,
+    cables: 0,
+  },
+  {
+    id: "s-channel",
+    kind: "channel",
+    name: "S offset channel",
+    icon: "∿",
+    category: "Cable routing",
+    description: "An offset channel for moving a run around an obstacle.",
+    widthCells: 5,
+    heightCells: 3,
+    cables: 0,
+  },
+  {
+    id: "cable-loop",
+    kind: "cable-loop",
+    name: "Cable loop",
+    icon: "◯",
+    category: "Cable routing",
+    description: "Open loop for retaining a loose cable bundle.",
+    widthCells: 2,
+    heightCells: 2,
+  },
+  {
+    id: "device-holder",
+    kind: "holder",
+    name: "Device holder",
+    icon: "⊔",
+    category: "Mounts",
+    description: "Resizable cradle for hubs, mini PCs, and adapters.",
+    widthCells: 5,
+    heightCells: 3,
+  },
+  {
+    id: "power-brick-mount",
+    kind: "power-brick",
+    name: "Power brick mount",
+    icon: "▯",
+    category: "Mounts",
+    description: "Resizable brick or power-strip holder with outlet count.",
+    widthCells: 7,
+    heightCells: 3,
+    outlets: 4,
+  },
 ];
 
 const INITIAL_ITEMS: PlannerItem[] = [
@@ -271,17 +418,38 @@ function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max);
 }
 
-function itemLabel(kind: ItemKind) {
-  return {
-    channel: "Straight channel",
-    "power-brick": "Power brick mount",
-    holder: "Device holder",
-    obstacle: "Reserved area",
-  }[kind];
-}
-
 function makeId(prefix: string) {
   return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function getChannelPaths(item: PlannerItem) {
+  const left = item.x + 20;
+  const right = item.x + item.width - 20;
+  const top = item.y + 20;
+  const bottom = item.y + item.height - 20;
+  const middleX = item.x + item.width / 2;
+  const middleY = item.y + item.height / 2;
+
+  switch (item.catalogId) {
+    case "l-channel":
+      return [`M ${left} ${bottom} V ${top} H ${right}`];
+    case "t-channel":
+      return [
+        `M ${left} ${top} H ${right}`,
+        `M ${middleX} ${top} V ${bottom}`,
+      ];
+    case "x-channel":
+      return [
+        `M ${left} ${middleY} H ${right}`,
+        `M ${middleX} ${top} V ${bottom}`,
+      ];
+    case "s-channel":
+      return [
+        `M ${left} ${bottom} C ${middleX} ${bottom}, ${middleX} ${top}, ${right} ${top}`,
+      ];
+    default:
+      return [`M ${left} ${middleY} H ${right}`];
+  }
 }
 
 export default function Home() {
@@ -298,6 +466,7 @@ export default function Home() {
     routeId: string;
     pointIndex: number;
   } | null>(null);
+  const [catalogOpen, setCatalogOpen] = useState(false);
   const [zoom, setZoom] = useState(88);
   const [printOpen, setPrintOpen] = useState(false);
   const [deskOpen, setDeskOpen] = useState(false);
@@ -342,6 +511,31 @@ export default function Home() {
   const selectedRouteLength = selectedRoute
     ? Math.round(calculateRouteLength(selectedRoute.points))
     : 0;
+  const selectedGridPlan =
+    selected?.kind === "grid"
+      ? (calculateGridTilePlan(
+          selected.width,
+          selected.height,
+          SYSTEM_SPECS.openGrid.grid,
+          selected.maxTileCellsX ?? 8,
+          selected.maxTileCellsY ?? 8,
+        ) as {
+          cellsX: number;
+          cellsY: number;
+          columns: number;
+          rows: number;
+          tileCount: number;
+        })
+      : null;
+  const layerStack = useMemo(
+    () =>
+      buildLayerStack(items, routes) as Array<{
+        id: string;
+        type: "item" | "route";
+        layer: number;
+      }>,
+    [items, routes],
+  );
   const printPlan = useMemo(
     () =>
       calculatePrintPlan(items, system) as {
@@ -350,6 +544,7 @@ export default function Home() {
         filamentGrams: number;
         groups: Array<{ label: string; count: number }>;
         overCapacityIds: string[];
+        gridTilesCount: number;
       },
     [items, system],
   );
@@ -495,11 +690,15 @@ export default function Home() {
     const nextGrid = SYSTEMS[nextSystem].grid;
     setSystem(nextSystem);
     setItems((current) =>
-      current.map((item) => ({
-        ...item,
-        x: snapToGrid(item.x, nextGrid),
-        y: snapToGrid(item.y, nextGrid),
-      })),
+      current.map((item) => {
+        const itemGrid =
+          item.kind === "grid" ? SYSTEM_SPECS.openGrid.grid : nextGrid;
+        return {
+          ...item,
+          x: snapToGrid(item.x, itemGrid),
+          y: snapToGrid(item.y, itemGrid),
+        };
+      }),
     );
     emitLog("system.changed", {
       from: system,
@@ -510,7 +709,27 @@ export default function Home() {
 
   function selectTool(tool: ToolId) {
     setActiveTool(tool);
-    if (tool === "select") return;
+    if (tool === "select") {
+      setCatalogOpen(false);
+      return;
+    }
+
+    if (tool === "parts") {
+      setCatalogOpen((current) => {
+        const next = !current;
+        setActiveTool(next ? "parts" : "select");
+        return next;
+      });
+      return;
+    }
+
+    if (tool === "grid") {
+      const baseplate = PART_CATALOG.find(
+        (part) => part.id === "opengrid-baseplate",
+      );
+      if (baseplate) addCatalogItem(baseplate);
+      return;
+    }
 
     if (tool === "route") {
       checkpointHistory();
@@ -520,6 +739,7 @@ export default function Home() {
         name: `Cable route ${index}`,
         color: ["#9f7aea", "#39d98a", "#f973c8"][index % 3],
         diameter: 5,
+        layer: layerStack.length,
         points: [
           [560, 280 + index * 12],
           [560, 500],
@@ -538,19 +758,16 @@ export default function Home() {
     }
 
     checkpointHistory();
-    const kind = tool as ItemKind;
     const next: PlannerItem = {
-      id: makeId(kind),
-      kind,
-      name: itemLabel(kind),
+      id: makeId("obstacle"),
+      kind: "obstacle",
+      name: "Reserved area",
       x: snapToGrid(desk.width / 2 - 90, systemSpec.grid),
       y: snapToGrid(desk.depth / 2 - 30, systemSpec.grid),
-      width:
-        kind === "obstacle" ? 280 : kind === "power-brick" ? 196 : 168,
-      height: kind === "obstacle" ? 112 : kind === "holder" ? 84 : 56,
+      width: 280,
+      height: 112,
       rotation: 0,
-      ...(kind === "channel" ? { cables: 0 } : {}),
-      ...(kind === "power-brick" ? { outlets: 4 } : {}),
+      layer: layerStack.length,
     };
     setItems((current) => [...current, next]);
     setSelectedId(next.id);
@@ -558,7 +775,52 @@ export default function Home() {
     setSelectedRoutePoint(null);
     setActiveTool("select");
     showToast(`${next.name} added — drag it into place`);
-    emitLog("item.added", { itemId: next.id, kind });
+    emitLog("item.added", { itemId: next.id, kind: next.kind });
+  }
+
+  function addCatalogItem(part: CatalogItem) {
+    if (part.openGridOnly && system !== "openGrid") {
+      showToast("openGrid baseplates require the openGrid system");
+      setActiveTool("select");
+      return;
+    }
+
+    checkpointHistory();
+    const partGrid = part.openGridOnly
+      ? SYSTEM_SPECS.openGrid.grid
+      : systemSpec.grid;
+    const next: PlannerItem = {
+      id: makeId(part.id),
+      kind: part.kind,
+      catalogId: part.id,
+      name: part.name,
+      x: snapToGrid(desk.width / 2 - (part.widthCells * partGrid) / 2, partGrid),
+      y: snapToGrid(
+        desk.depth / 2 - (part.heightCells * partGrid) / 2,
+        partGrid,
+      ),
+      width: part.widthCells * partGrid,
+      height: part.heightCells * partGrid,
+      rotation: 0,
+      layer: part.kind === "grid" ? 0 : layerStack.length,
+      ...(part.cables !== undefined ? { cables: part.cables } : {}),
+      ...(part.outlets !== undefined ? { outlets: part.outlets } : {}),
+      ...(part.kind === "grid"
+        ? { maxTileCellsX: 8, maxTileCellsY: 8 }
+        : {}),
+    };
+    setItems((current) => [...current, next]);
+    setSelectedId(next.id);
+    setSelectedRouteId("");
+    setSelectedRoutePoint(null);
+    setCatalogOpen(false);
+    setActiveTool("select");
+    showToast(`${next.name} added — drag or resize it`);
+    emitLog("catalog.item_added", {
+      itemId: next.id,
+      catalogId: part.id,
+      kind: part.kind,
+    });
   }
 
   function updateSelected(patch: Partial<PlannerItem>, record = true) {
@@ -751,13 +1013,17 @@ export default function Home() {
     if (active.type === "move-item") {
       const moving = items.find((item) => item.id === active.id);
       if (!moving) return;
+      const movingGrid =
+        moving.kind === "grid"
+          ? SYSTEM_SPECS.openGrid.grid
+          : systemSpec.grid;
       const nextX = snapToGrid(
         clamp(local.x - active.dx, 0, desk.width - moving.width),
-        systemSpec.grid,
+        movingGrid,
       );
       const nextY = snapToGrid(
         clamp(local.y - active.dy, 0, desk.depth - moving.height),
-        systemSpec.grid,
+        movingGrid,
       );
       setItems((current) =>
         current.map((item) =>
@@ -769,20 +1035,24 @@ export default function Home() {
 
     if (active.type === "resize-item") {
       const start = active.startItem;
+      const resizeGrid =
+        start.kind === "grid"
+          ? SYSTEM_SPECS.openGrid.grid
+          : systemSpec.grid;
       const minWidth =
         start.kind === "power-brick" || start.kind === "holder"
-          ? systemSpec.grid * 3
-          : systemSpec.grid;
+          ? resizeGrid * 3
+          : resizeGrid;
       const minHeight =
         start.kind === "power-brick" || start.kind === "holder"
-          ? systemSpec.grid * 2
-          : systemSpec.grid;
+          ? resizeGrid * 2
+          : resizeGrid;
       const resized = resizeItemFromCorner(
         start,
         active.corner,
         local,
         desk,
-        systemSpec.grid,
+        resizeGrid,
         { width: minWidth, height: minHeight },
       );
 
@@ -986,6 +1256,48 @@ export default function Home() {
     emitLog("route.updated", { routeId, ...patch });
   }
 
+  function moveSelectionLayer(movement: LayerMovement) {
+    const selection = selected
+      ? { id: selected.id, type: "item" as const }
+      : selectedRoute
+        ? { id: selectedRoute.id, type: "route" as const }
+        : null;
+    if (!selection) return;
+
+    const reordered = reorderLayerStack(
+      items,
+      routes,
+      selection,
+      movement,
+    ) as Array<{ id: string; type: "item" | "route"; layer: number }>;
+    if (
+      reordered.every(
+        (entry, index) =>
+          entry.id === layerStack[index]?.id &&
+          entry.type === layerStack[index]?.type,
+      )
+    ) {
+      return;
+    }
+    const layers = new Map(
+      reordered.map((entry) => [`${entry.type}:${entry.id}`, entry.layer]),
+    );
+    checkpointHistory();
+    setItems((current) =>
+      current.map((item) => ({
+        ...item,
+        layer: layers.get(`item:${item.id}`) ?? item.layer,
+      })),
+    );
+    setRoutes((current) =>
+      current.map((route) => ({
+        ...route,
+        layer: layers.get(`route:${route.id}`) ?? route.layer,
+      })),
+    );
+    emitLog("selection.layer_changed", { ...selection, movement });
+  }
+
   function addRouteBend(route: CableRoute) {
     checkpointHistory();
     const points = insertRouteBend(route.points).map(([x, y]) => [
@@ -1079,6 +1391,219 @@ export default function Home() {
     return () => window.removeEventListener("keydown", handleKeyboard);
   });
 
+  function renderRouteLayer(route: CableRoute) {
+    const routePoints = route.points.map((point) => point.join(",")).join(" ");
+    return (
+      <g
+        key={`route:${route.id}`}
+        className={`route ${
+          selectedRouteId === route.id ? "selected" : ""
+        }`}
+      >
+        <polyline
+          points={routePoints}
+          className="route-hit"
+          onPointerDown={(event) => handleRoutePointerDown(event, route)}
+        />
+        <polyline points={routePoints} className="route-halo" />
+        <polyline
+          points={routePoints}
+          stroke={route.color}
+          strokeWidth={route.diameter + 3}
+        />
+        {selectedRouteId === route.id && (
+          <polyline points={routePoints} className="route-selection" />
+        )}
+      </g>
+    );
+  }
+
+  function renderItemLayer(item: PlannerItem) {
+    const gridPlan =
+      item.kind === "grid"
+        ? (calculateGridTilePlan(
+            item.width,
+            item.height,
+            SYSTEM_SPECS.openGrid.grid,
+            item.maxTileCellsX ?? 8,
+            item.maxTileCellsY ?? 8,
+          ) as { cellsX: number; cellsY: number; tileCount: number })
+        : null;
+    return (
+      <g
+        key={`item:${item.id}`}
+        className={`planner-item item-${item.kind} ${
+          selectedId === item.id ? "selected" : ""
+        }`}
+        onPointerDown={(event) => handlePointerDown(event, item)}
+        filter={item.kind === "grid" ? undefined : "url(#item-shadow)"}
+        role="button"
+        aria-label={`${item.name}, at ${item.x} by ${item.y} millimetres`}
+        tabIndex={0}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            setSelectedId(item.id);
+            setSelectedRouteId("");
+            setSelectedRoutePoint(null);
+          }
+        }}
+      >
+        <rect
+          x={item.x}
+          y={item.y}
+          width={item.width}
+          height={item.height}
+          rx={item.kind === "channel" ? 12 : 18}
+          className="item-body"
+          fill={item.kind === "grid" ? "url(#open-grid-plate)" : undefined}
+        />
+        {item.kind === "grid" && gridPlan && (
+          <>
+            <text
+              x={item.x + item.width / 2}
+              y={item.y + item.height / 2 - 4}
+              textAnchor="middle"
+              className="grid-label"
+            >
+              {gridPlan.cellsX} × {gridPlan.cellsY} cells
+            </text>
+            <text
+              x={item.x + item.width / 2}
+              y={item.y + item.height / 2 + 18}
+              textAnchor="middle"
+              className="grid-count-label"
+            >
+              {gridPlan.tileCount} printable{" "}
+              {gridPlan.tileCount === 1 ? "grid" : "grids"}
+            </text>
+          </>
+        )}
+        {item.kind === "channel" && (
+          <>
+            {getChannelPaths(item).map((path) => (
+              <path key={path} d={path} className="channel-core" />
+            ))}
+            {Array.from({
+              length: Math.max(2, Math.floor(item.width / 54)),
+            }).map((_, index) => (
+              <line
+                key={index}
+                x1={item.x + 22 + index * 52}
+                y1={item.y + 12}
+                x2={item.x + 22 + index * 52}
+                y2={item.y + item.height - 12}
+                className="channel-rib"
+              />
+            ))}
+          </>
+        )}
+        {item.kind === "cable-loop" && (
+          <>
+            <ellipse
+              cx={item.x + item.width / 2}
+              cy={item.y + item.height / 2}
+              rx={Math.max(8, item.width / 2 - 16)}
+              ry={Math.max(8, item.height / 2 - 16)}
+              className="cable-loop-ring"
+            />
+            <line
+              x1={item.x + item.width / 2}
+              y1={item.y + 4}
+              x2={item.x + item.width / 2}
+              y2={item.y + 23}
+              className="cable-loop-opening"
+            />
+          </>
+        )}
+        {item.kind === "power-brick" && (
+          <>
+            {getPowerBrickOutletLayout(
+              item.width,
+              item.height,
+              item.outlets ?? 6,
+            ).map((outlet, index) => (
+              <circle
+                key={index}
+                cx={item.x + outlet.x}
+                cy={item.y + outlet.y}
+                r={outlet.radius}
+                className="outlet"
+              />
+            ))}
+          </>
+        )}
+        {item.kind === "holder" && (
+          <>
+            <rect
+              x={item.x + 20}
+              y={item.y + 15}
+              width={item.width - 40}
+              height="12"
+              rx="6"
+              className="holder-slot"
+            />
+            <line
+              x1={item.x + 14}
+              y1={item.y + item.height - 15}
+              x2={item.x + item.width - 14}
+              y2={item.y + item.height - 15}
+              className="holder-lip"
+            />
+          </>
+        )}
+        {item.kind === "obstacle" && (
+          <text
+            x={item.x + item.width / 2}
+            y={item.y + item.height / 2 + 7}
+            textAnchor="middle"
+            className="obstacle-label"
+          >
+            {item.name}
+          </text>
+        )}
+        {selectedId === item.id && (
+          <>
+            <rect
+              x={item.x - 6}
+              y={item.y - 6}
+              width={item.width + 12}
+              height={item.height + 12}
+              rx="16"
+              className="selection-outline"
+            />
+            {[
+              ["nw", item.x - 6, item.y - 6],
+              ["ne", item.x + item.width + 6, item.y - 6],
+              ["sw", item.x - 6, item.y + item.height + 6],
+              [
+                "se",
+                item.x + item.width + 6,
+                item.y + item.height + 6,
+              ],
+            ].map(([corner, x, y]) => (
+              <rect
+                key={corner}
+                x={Number(x) - 7}
+                y={Number(y) - 7}
+                width="14"
+                height="14"
+                className={`selection-handle resize-${corner}`}
+                onPointerDown={(event) =>
+                  handleResizePointerDown(
+                    event,
+                    item,
+                    corner as ResizeCorner,
+                  )
+                }
+                aria-label={`Resize ${item.name} from ${corner} corner`}
+              />
+            ))}
+          </>
+        )}
+      </g>
+    );
+  }
+
   return (
     <main className="app-shell">
       <header className="topbar">
@@ -1153,6 +1678,64 @@ export default function Home() {
           </button>
         ))}
       </aside>
+
+      {catalogOpen && (
+        <aside
+          className="parts-palette"
+          role="dialog"
+          aria-modal="false"
+          aria-labelledby="parts-palette-title"
+        >
+          <header>
+            <div>
+              <span className="eyebrow">Printable catalogue</span>
+              <h2 id="parts-palette-title">Add a part</h2>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setCatalogOpen(false);
+                setActiveTool("select");
+              }}
+              aria-label="Close parts catalogue"
+            >
+              ×
+            </button>
+          </header>
+          <p>
+            Schematic planning parts based on the official Underware and
+            openGrid customizers.
+          </p>
+          {(["Foundation", "Cable routing", "Mounts"] as const).map(
+            (category) => (
+              <section key={category}>
+                <h3>{category}</h3>
+                <div className="catalog-grid">
+                  {PART_CATALOG.filter(
+                    (part) => part.category === category,
+                  ).map((part) => (
+                    <button
+                      type="button"
+                      key={part.id}
+                      className={
+                        part.id === "opengrid-baseplate"
+                          ? "priority-part"
+                          : ""
+                      }
+                      onClick={() => addCatalogItem(part)}
+                      disabled={part.openGridOnly && system !== "openGrid"}
+                    >
+                      <span aria-hidden="true">{part.icon}</span>
+                      <strong>{part.name}</strong>
+                      <small>{part.description}</small>
+                    </button>
+                  ))}
+                </div>
+              </section>
+            ),
+          )}
+        </aside>
+      )}
 
       <section className="workspace" aria-label="Desk underside planner">
         <div className="workspace-heading">
@@ -1246,6 +1829,27 @@ export default function Home() {
                     floodOpacity=".42"
                   />
                 </filter>
+                <pattern
+                  id="open-grid-plate"
+                  width={SYSTEM_SPECS.openGrid.grid}
+                  height={SYSTEM_SPECS.openGrid.grid}
+                  patternUnits="userSpaceOnUse"
+                >
+                  <rect
+                    x="1.5"
+                    y="1.5"
+                    width={SYSTEM_SPECS.openGrid.grid - 3}
+                    height={SYSTEM_SPECS.openGrid.grid - 3}
+                    rx="5"
+                    className="open-grid-cell"
+                  />
+                  <circle
+                    cx={SYSTEM_SPECS.openGrid.grid / 2}
+                    cy={SYSTEM_SPECS.openGrid.grid / 2}
+                    r="2.5"
+                    className="open-grid-hole"
+                  />
+                </pattern>
               </defs>
 
               <rect
@@ -1265,177 +1869,14 @@ export default function Home() {
                 fill="url(#major-grid)"
               />
 
-              {routes.map((route) => (
-                <g
-                  key={route.id}
-                  className={`route ${
-                    selectedRouteId === route.id ? "selected" : ""
-                  }`}
-                >
-                  <polyline
-                    points={route.points.map((point) => point.join(",")).join(" ")}
-                    className="route-hit"
-                    onPointerDown={(event) =>
-                      handleRoutePointerDown(event, route)
-                    }
-                  />
-                  <polyline
-                    points={route.points.map((point) => point.join(",")).join(" ")}
-                    className="route-halo"
-                  />
-                  <polyline
-                    points={route.points.map((point) => point.join(",")).join(" ")}
-                    stroke={route.color}
-                    strokeWidth={route.diameter + 3}
-                  />
-                  {selectedRouteId === route.id && (
-                    <polyline
-                      points={route.points
-                        .map((point) => point.join(","))
-                        .join(" ")}
-                      className="route-selection"
-                    />
-                  )}
-                </g>
-              ))}
-
-              {items.map((item) => (
-                <g
-                  key={item.id}
-                  className={`planner-item item-${item.kind} ${
-                    selectedId === item.id ? "selected" : ""
-                  }`}
-                  onPointerDown={(event) => handlePointerDown(event, item)}
-                  filter="url(#item-shadow)"
-                  role="button"
-                  aria-label={`${item.name}, at ${item.x} by ${item.y} millimetres`}
-                  tabIndex={0}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter" || event.key === " ") {
-                      setSelectedId(item.id);
-                      setSelectedRouteId("");
-                      setSelectedRoutePoint(null);
-                    }
-                  }}
-                >
-                  <rect
-                    x={item.x}
-                    y={item.y}
-                    width={item.width}
-                    height={item.height}
-                    rx={item.kind === "channel" ? 12 : 18}
-                    className="item-body"
-                  />
-                  {item.kind === "channel" && (
-                    <>
-                      <line
-                        x1={item.x + 16}
-                        y1={item.y + item.height / 2}
-                        x2={item.x + item.width - 16}
-                        y2={item.y + item.height / 2}
-                        className="channel-core"
-                      />
-                      {Array.from({
-                        length: Math.max(2, Math.floor(item.width / 54)),
-                      }).map((_, index) => (
-                        <line
-                          key={index}
-                          x1={item.x + 22 + index * 52}
-                          y1={item.y + 12}
-                          x2={item.x + 22 + index * 52}
-                          y2={item.y + item.height - 12}
-                          className="channel-rib"
-                        />
-                      ))}
-                    </>
-                  )}
-                  {item.kind === "power-brick" && (
-                    <>
-                      {getPowerBrickOutletLayout(
-                        item.width,
-                        item.height,
-                        item.outlets ?? 6,
-                      ).map((outlet, index) => (
-                        <circle
-                          key={index}
-                          cx={item.x + outlet.x}
-                          cy={item.y + outlet.y}
-                          r={outlet.radius}
-                          className="outlet"
-                        />
-                      ))}
-                    </>
-                  )}
-                  {item.kind === "holder" && (
-                    <>
-                      <rect
-                        x={item.x + 20}
-                        y={item.y + 15}
-                        width={item.width - 40}
-                        height="12"
-                        rx="6"
-                        className="holder-slot"
-                      />
-                      <line
-                        x1={item.x + 14}
-                        y1={item.y + item.height - 15}
-                        x2={item.x + item.width - 14}
-                        y2={item.y + item.height - 15}
-                        className="holder-lip"
-                      />
-                    </>
-                  )}
-                  {item.kind === "obstacle" && (
-                    <text
-                      x={item.x + item.width / 2}
-                      y={item.y + item.height / 2 + 7}
-                      textAnchor="middle"
-                      className="obstacle-label"
-                    >
-                      {item.name}
-                    </text>
-                  )}
-                  {selectedId === item.id && (
-                    <>
-                      <rect
-                        x={item.x - 6}
-                        y={item.y - 6}
-                        width={item.width + 12}
-                        height={item.height + 12}
-                        rx="16"
-                        className="selection-outline"
-                      />
-                      {[
-                        ["nw", item.x - 6, item.y - 6],
-                        ["ne", item.x + item.width + 6, item.y - 6],
-                        ["sw", item.x - 6, item.y + item.height + 6],
-                        [
-                          "se",
-                          item.x + item.width + 6,
-                          item.y + item.height + 6,
-                        ],
-                      ].map(([corner, x, y]) => (
-                        <rect
-                          key={corner}
-                          x={Number(x) - 7}
-                          y={Number(y) - 7}
-                          width="14"
-                          height="14"
-                          className={`selection-handle resize-${corner}`}
-                          onPointerDown={(event) =>
-                            handleResizePointerDown(
-                              event,
-                              item,
-                              corner as ResizeCorner,
-                            )
-                          }
-                          aria-label={`Resize ${item.name} from ${corner} corner`}
-                        />
-                      ))}
-                    </>
-                  )}
-                </g>
-              ))}
+              {layerStack.map((entry) => {
+                if (entry.type === "route") {
+                  const route = routes.find((candidate) => candidate.id === entry.id);
+                  return route ? renderRouteLayer(route) : null;
+                }
+                const item = items.find((candidate) => candidate.id === entry.id);
+                return item ? renderItemLayer(item) : null;
+              })}
 
               {selectedRoute && (
                 <g className="route-points" aria-label="Cable route control points">
@@ -1526,6 +1967,15 @@ export default function Home() {
             <small>Print plan</small>
             <strong>{printPlan.partsCount} parts</strong>
           </span>
+          {printPlan.gridTilesCount > 0 && (
+            <span>
+              <small>openGrid</small>
+              <strong>
+                {printPlan.gridTilesCount}{" "}
+                {printPlan.gridTilesCount === 1 ? "grid" : "grids"}
+              </strong>
+            </span>
+          )}
           <span>
             <small>Estimate</small>
             <strong>
@@ -1632,6 +2082,60 @@ export default function Home() {
                   </span>
                 </label>
               </div>
+              <div className="route-color-field">
+                <label>
+                  <span>Route color</span>
+                  <input
+                    type="color"
+                    value={selectedRoute.color}
+                    onChange={(event) =>
+                      updateRoute(selectedRoute.id, {
+                        color: event.target.value,
+                      })
+                    }
+                    aria-label={`${selectedRoute.name} color`}
+                  />
+                </label>
+                <div className="color-swatches" aria-label="Route color presets">
+                  {ROUTE_COLORS.map((color) => (
+                    <button
+                      type="button"
+                      key={color}
+                      className={selectedRoute.color === color ? "active" : ""}
+                      style={{ background: color }}
+                      onClick={() =>
+                        updateRoute(selectedRoute.id, { color })
+                      }
+                      aria-label={`Set route color to ${color}`}
+                      aria-pressed={selectedRoute.color === color}
+                    />
+                  ))}
+                </div>
+              </div>
+            </section>
+            <section className="inspector-section">
+              <h2>Layer order</h2>
+              <div className="layer-options">
+                <button type="button" onClick={() => moveSelectionLayer("back")}>
+                  Send to back
+                </button>
+                <button
+                  type="button"
+                  onClick={() => moveSelectionLayer("backward")}
+                >
+                  Send backward
+                </button>
+                <button
+                  type="button"
+                  onClick={() => moveSelectionLayer("forward")}
+                >
+                  Bring forward
+                </button>
+                <button type="button" onClick={() => moveSelectionLayer("front")}>
+                  Bring to front
+                </button>
+              </div>
+              <p>Routes and physical parts share the same visual layer stack.</p>
             </section>
             <section className="inspector-actions">
               <button type="button" onClick={() => addRouteBend(selectedRoute)}>
@@ -1731,6 +2235,140 @@ export default function Home() {
                 ))}
               </div>
             </section>
+
+            <section className="inspector-section">
+              <h2>Layer order</h2>
+              <div className="layer-options">
+                <button type="button" onClick={() => moveSelectionLayer("back")}>
+                  Send to back
+                </button>
+                <button
+                  type="button"
+                  onClick={() => moveSelectionLayer("backward")}
+                >
+                  Send backward
+                </button>
+                <button
+                  type="button"
+                  onClick={() => moveSelectionLayer("forward")}
+                >
+                  Bring forward
+                </button>
+                <button type="button" onClick={() => moveSelectionLayer("front")}>
+                  Bring to front
+                </button>
+              </div>
+              <p>
+                Use this to place a power brick behind a cable route or keep a
+                grid below every mounted part.
+              </p>
+            </section>
+
+            {selected.kind === "grid" && selectedGridPlan && (
+              <section className="inspector-section grid-config">
+                <div className="section-heading">
+                  <h2>openGrid coverage</h2>
+                  <strong>
+                    {selectedGridPlan.tileCount}{" "}
+                    {selectedGridPlan.tileCount === 1 ? "grid" : "grids"} to
+                    print
+                  </strong>
+                </div>
+                <div className="grid-coverage-summary">
+                  <span>
+                    <strong>
+                      {selectedGridPlan.cellsX} × {selectedGridPlan.cellsY}
+                    </strong>
+                    cells covered
+                  </span>
+                  <span>
+                    <strong>
+                      {selectedGridPlan.columns} × {selectedGridPlan.rows}
+                    </strong>
+                    printable tiles
+                  </span>
+                </div>
+                <div className="field-grid">
+                  <label>
+                    <span>Cells W</span>
+                    <span className="input-unit">
+                      <input
+                        type="number"
+                        min="1"
+                        value={selectedGridPlan.cellsX}
+                        onChange={(event) =>
+                          updateSelected({
+                            width:
+                              Math.max(1, Number(event.target.value)) *
+                              SYSTEM_SPECS.openGrid.grid,
+                          })
+                        }
+                      />
+                    </span>
+                  </label>
+                  <label>
+                    <span>Cells H</span>
+                    <span className="input-unit">
+                      <input
+                        type="number"
+                        min="1"
+                        value={selectedGridPlan.cellsY}
+                        onChange={(event) =>
+                          updateSelected({
+                            height:
+                              Math.max(1, Number(event.target.value)) *
+                              SYSTEM_SPECS.openGrid.grid,
+                          })
+                        }
+                      />
+                    </span>
+                  </label>
+                  <label>
+                    <span>Tile max W</span>
+                    <span className="input-unit">
+                      <input
+                        type="number"
+                        min="1"
+                        max="20"
+                        value={selected.maxTileCellsX ?? 8}
+                        onChange={(event) =>
+                          updateSelected({
+                            maxTileCellsX: Math.max(
+                              1,
+                              Number(event.target.value),
+                            ),
+                          })
+                        }
+                      />
+                    </span>
+                  </label>
+                  <label>
+                    <span>Tile max H</span>
+                    <span className="input-unit">
+                      <input
+                        type="number"
+                        min="1"
+                        max="20"
+                        value={selected.maxTileCellsY ?? 8}
+                        onChange={(event) =>
+                          updateSelected({
+                            maxTileCellsY: Math.max(
+                              1,
+                              Number(event.target.value),
+                            ),
+                          })
+                        }
+                      />
+                    </span>
+                  </label>
+                </div>
+                <p>
+                  Defaults to 8 × 8 cells (224 × 224 mm). Change the maximum
+                  tile size to match your printer bed; the print list splits
+                  edge grids automatically.
+                </p>
+              </section>
+            )}
 
             {selected.kind === "channel" && (
               <section className="inspector-section">
@@ -1995,11 +2633,21 @@ export default function Home() {
                 ×
               </button>
             </header>
-            <div className="print-totals">
+            <div
+              className={`print-totals ${
+                printPlan.gridTilesCount > 0 ? "has-grid-total" : ""
+              }`}
+            >
               <span>
                 <strong>{printPlan.partsCount}</strong>
                 <small>parts</small>
               </span>
+              {printPlan.gridTilesCount > 0 && (
+                <span>
+                  <strong>{printPlan.gridTilesCount}</strong>
+                  <small>openGrid plates</small>
+                </span>
+              )}
               <span>
                 <strong>
                   {Math.floor(printPlan.printMinutes / 60)}h{" "}
@@ -2028,7 +2676,11 @@ export default function Home() {
                   </span>
                   <span>
                     <strong>{group.label}</strong>
-                    <small>{systemSpec.label} compatible</small>
+                    <small>
+                      {group.label.startsWith("openGrid baseplate")
+                        ? "openGrid compatible"
+                        : `${systemSpec.label} compatible`}
+                    </small>
                   </span>
                   <b>× {group.count}</b>
                 </div>
