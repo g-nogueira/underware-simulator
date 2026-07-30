@@ -10,9 +10,16 @@ import {
 } from "react";
 import {
   SYSTEM_SPECS,
+  calculateRouteLength,
   calculatePrintPlan,
   getCapacityState,
+  getPowerBrickOutletLayout,
+  insertRouteBend,
+  moveRoutePoint,
+  removeRouteBend,
+  resizeItemFromCorner,
   snapToGrid,
+  translateRoute,
   validatePlanFile,
 } from "@/lib/planner.mjs";
 
@@ -36,6 +43,7 @@ type PlannerItem = {
   height: number;
   rotation: 0 | 90 | 180 | 270;
   cables?: number;
+  outlets?: number;
 };
 
 type CableRoute = {
@@ -65,6 +73,25 @@ type TraceEvent = {
   traceId: string;
   details?: Record<string, unknown>;
 };
+
+type ResizeCorner = "nw" | "ne" | "sw" | "se";
+
+type CanvasInteraction =
+  | { type: "move-item"; id: string; dx: number; dy: number }
+  | {
+      type: "resize-item";
+      id: string;
+      corner: ResizeCorner;
+      startItem: PlannerItem;
+    }
+  | {
+      type: "move-route";
+      id: string;
+      startX: number;
+      startY: number;
+      startPoints: CableRoute["points"];
+    }
+  | { type: "route-point"; id: string; pointIndex: number };
 
 const AUTOSAVE_KEY = "underware-route-lab:plan:v1";
 
@@ -130,6 +157,7 @@ const INITIAL_ITEMS: PlannerItem[] = [
     width: 420,
     height: 80,
     rotation: 0,
+    outlets: 6,
   },
   {
     id: "channel-left",
@@ -265,6 +293,11 @@ export default function Home() {
   const [items, setItems] = useState<PlannerItem[]>(INITIAL_ITEMS);
   const [routes, setRoutes] = useState<CableRoute[]>(INITIAL_ROUTES);
   const [selectedId, setSelectedId] = useState("channel-middle");
+  const [selectedRouteId, setSelectedRouteId] = useState("");
+  const [selectedRoutePoint, setSelectedRoutePoint] = useState<{
+    routeId: string;
+    pointIndex: number;
+  } | null>(null);
   const [zoom, setZoom] = useState(88);
   const [printOpen, setPrintOpen] = useState(false);
   const [deskOpen, setDeskOpen] = useState(false);
@@ -276,12 +309,29 @@ export default function Home() {
   const [historyState, setHistoryState] = useState({ undo: 0, redo: 0 });
   const [toast, setToast] = useState("");
   const fileInput = useRef<HTMLInputElement>(null);
-  const drag = useRef<{ id: string; dx: number; dy: number } | null>(null);
+  const interaction = useRef<CanvasInteraction | null>(null);
   const past = useRef<PlanSnapshot[]>([]);
   const future = useRef<PlanSnapshot[]>([]);
   const traceIdRef = useRef("starting");
+  const nameEdit = useRef<{
+    type: "item" | "route";
+    id: string;
+    original: string;
+    recorded: boolean;
+  } | null>(null);
 
   const selected = items.find((item) => item.id === selectedId) ?? null;
+  const selectedRoute =
+    routes.find((route) => route.id === selectedRouteId) ?? null;
+  const selectedRoutePointIndex =
+    selectedRoutePoint?.routeId === selectedRouteId
+      ? selectedRoutePoint.pointIndex
+      : null;
+  const selectedRoutePointIsBend =
+    selectedRoute !== null &&
+    selectedRoutePointIndex !== null &&
+    selectedRoutePointIndex > 0 &&
+    selectedRoutePointIndex < selectedRoute.points.length - 1;
   const systemSpec = SYSTEMS[system];
   const capacity = selected?.kind === "channel" ? selected.cables ?? 0 : 0;
   const capacityState = getCapacityState(capacity, systemSpec.capacity) as {
@@ -289,6 +339,9 @@ export default function Home() {
     level: "ok" | "near" | "over";
     remaining: number;
   };
+  const selectedRouteLength = selectedRoute
+    ? Math.round(calculateRouteLength(selectedRoute.points))
+    : 0;
   const printPlan = useMemo(
     () =>
       calculatePrintPlan(items, system) as {
@@ -322,6 +375,8 @@ export default function Home() {
             setItems(result.plan.items);
             setRoutes(result.plan.routes);
             setSelectedId(result.plan.items[0]?.id ?? "");
+            setSelectedRouteId("");
+            setSelectedRoutePoint(null);
             setSavedAt(result.plan.savedAt ?? "restored");
           }
         } catch {
@@ -397,6 +452,10 @@ export default function Home() {
         ? current
         : (value.items[0]?.id ?? ""),
     );
+    setSelectedRouteId((current) =>
+      value.routes.some((route) => route.id === current) ? current : "",
+    );
+    setSelectedRoutePoint(null);
   }
 
   function checkpointHistory() {
@@ -456,21 +515,22 @@ export default function Home() {
     if (tool === "route") {
       checkpointHistory();
       const index = routes.length + 1;
-      setRoutes((current) => [
-        ...current,
-        {
-          id: makeId("route"),
-          name: `Cable route ${index}`,
-          color: ["#9f7aea", "#39d98a", "#f973c8"][index % 3],
-          diameter: 5,
-          points: [
-            [560, 280 + index * 12],
-            [560, 500],
-            [1060, 500],
-            [1060, 610],
-          ],
-        },
-      ]);
+      const nextRoute: CableRoute = {
+        id: makeId("route"),
+        name: `Cable route ${index}`,
+        color: ["#9f7aea", "#39d98a", "#f973c8"][index % 3],
+        diameter: 5,
+        points: [
+          [560, 280 + index * 12],
+          [560, 500],
+          [1060, 500],
+          [1060, 610],
+        ],
+      };
+      setRoutes((current) => [...current, nextRoute]);
+      setSelectedId("");
+      setSelectedRouteId(nextRoute.id);
+      setSelectedRoutePoint(null);
       showToast(`Cable route ${index} added`);
       emitLog("route.added", { route: index });
       setActiveTool("select");
@@ -490,9 +550,12 @@ export default function Home() {
       height: kind === "obstacle" ? 112 : kind === "holder" ? 84 : 56,
       rotation: 0,
       ...(kind === "channel" ? { cables: 0 } : {}),
+      ...(kind === "power-brick" ? { outlets: 4 } : {}),
     };
     setItems((current) => [...current, next]);
     setSelectedId(next.id);
+    setSelectedRouteId("");
+    setSelectedRoutePoint(null);
     setActiveTool("select");
     showToast(`${next.name} added — drag it into place`);
     emitLog("item.added", { itemId: next.id, kind });
@@ -507,6 +570,64 @@ export default function Home() {
       ),
     );
     emitLog("item.updated", { itemId: selected.id, ...patch });
+  }
+
+  function beginSelectionNameEdit() {
+    if (selected) {
+      nameEdit.current = {
+        type: "item",
+        id: selected.id,
+        original: selected.name,
+        recorded: false,
+      };
+    } else if (selectedRoute) {
+      nameEdit.current = {
+        type: "route",
+        id: selectedRoute.id,
+        original: selectedRoute.name,
+        recorded: false,
+      };
+    }
+  }
+
+  function changeSelectionName(name: string) {
+    const edit = nameEdit.current;
+    if (!edit) return;
+    if (!edit.recorded) {
+      checkpointHistory();
+      edit.recorded = true;
+    }
+
+    if (edit.type === "item") {
+      setItems((current) =>
+        current.map((item) =>
+          item.id === edit.id ? { ...item, name } : item,
+        ),
+      );
+    } else {
+      setRoutes((current) =>
+        current.map((route) =>
+          route.id === edit.id ? { ...route, name } : route,
+        ),
+      );
+    }
+  }
+
+  function finishSelectionNameEdit() {
+    const edit = nameEdit.current;
+    if (!edit) return;
+    const currentName =
+      edit.type === "item"
+        ? items.find((item) => item.id === edit.id)?.name
+        : routes.find((route) => route.id === edit.id)?.name;
+    if (edit.recorded && currentName !== undefined && currentName !== edit.original) {
+      emitLog(`${edit.type}.renamed`, {
+        [`${edit.type}Id`]: edit.id,
+        from: edit.original,
+        to: currentName,
+      });
+    }
+    nameEdit.current = null;
   }
 
   function rotateSelected(rotation: PlannerItem["rotation"]) {
@@ -546,46 +667,198 @@ export default function Home() {
     point.x = event.clientX;
     point.y = event.clientY;
     const local = point.matrixTransform(svg.getScreenCTM()?.inverse());
-    drag.current = { id: item.id, dx: local.x - item.x, dy: local.y - item.y };
+    interaction.current = {
+      type: "move-item",
+      id: item.id,
+      dx: local.x - item.x,
+      dy: local.y - item.y,
+    };
     setSelectedId(item.id);
+    setSelectedRouteId("");
+    setSelectedRoutePoint(null);
+  }
+
+  function handleResizePointerDown(
+    event: ReactPointerEvent<SVGRectElement>,
+    item: PlannerItem,
+    corner: ResizeCorner,
+  ) {
+    if (activeTool !== "select") return;
+    event.stopPropagation();
+    checkpointHistory();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    interaction.current = {
+      type: "resize-item",
+      id: item.id,
+      corner,
+      startItem: { ...item },
+    };
+    setSelectedId(item.id);
+    setSelectedRouteId("");
+    setSelectedRoutePoint(null);
+  }
+
+  function handleRoutePointerDown(
+    event: ReactPointerEvent<SVGPolylineElement>,
+    route: CableRoute,
+  ) {
+    if (activeTool !== "select") return;
+    event.stopPropagation();
+    checkpointHistory();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    const svg = event.currentTarget.ownerSVGElement;
+    if (!svg) return;
+    const point = svg.createSVGPoint();
+    point.x = event.clientX;
+    point.y = event.clientY;
+    const local = point.matrixTransform(svg.getScreenCTM()?.inverse());
+    interaction.current = {
+      type: "move-route",
+      id: route.id,
+      startX: local.x,
+      startY: local.y,
+      startPoints: route.points.map(([x, y]) => [x, y]),
+    };
+    setSelectedId("");
+    setSelectedRouteId(route.id);
+    setSelectedRoutePoint(null);
+  }
+
+  function handleRoutePointPointerDown(
+    event: ReactPointerEvent<SVGCircleElement>,
+    routeId: string,
+    pointIndex: number,
+  ) {
+    if (activeTool !== "select") return;
+    event.stopPropagation();
+    checkpointHistory();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    interaction.current = { type: "route-point", id: routeId, pointIndex };
+    setSelectedId("");
+    setSelectedRouteId(routeId);
+    setSelectedRoutePoint({ routeId, pointIndex });
   }
 
   function handlePointerMove(event: ReactPointerEvent<SVGSVGElement>) {
-    if (!drag.current) return;
+    const active = interaction.current;
+    if (!active) return;
     const svg = event.currentTarget;
     const point = svg.createSVGPoint();
     point.x = event.clientX;
     point.y = event.clientY;
     const local = point.matrixTransform(svg.getScreenCTM()?.inverse());
-    const moving = items.find((item) => item.id === drag.current?.id);
-    if (!moving) return;
-    const nextX = snapToGrid(
-      clamp(local.x - drag.current.dx, 0, desk.width - moving.width),
-      systemSpec.grid,
-    );
-    const nextY = snapToGrid(
-      clamp(local.y - drag.current.dy, 0, desk.depth - moving.height),
-      systemSpec.grid,
-    );
-    setItems((current) =>
-      current.map((item) =>
-        item.id === moving.id ? { ...item, x: nextX, y: nextY } : item,
+
+    if (active.type === "move-item") {
+      const moving = items.find((item) => item.id === active.id);
+      if (!moving) return;
+      const nextX = snapToGrid(
+        clamp(local.x - active.dx, 0, desk.width - moving.width),
+        systemSpec.grid,
+      );
+      const nextY = snapToGrid(
+        clamp(local.y - active.dy, 0, desk.depth - moving.height),
+        systemSpec.grid,
+      );
+      setItems((current) =>
+        current.map((item) =>
+          item.id === moving.id ? { ...item, x: nextX, y: nextY } : item,
+        ),
+      );
+      return;
+    }
+
+    if (active.type === "resize-item") {
+      const start = active.startItem;
+      const minWidth =
+        start.kind === "power-brick" || start.kind === "holder"
+          ? systemSpec.grid * 3
+          : systemSpec.grid;
+      const minHeight =
+        start.kind === "power-brick" || start.kind === "holder"
+          ? systemSpec.grid * 2
+          : systemSpec.grid;
+      const resized = resizeItemFromCorner(
+        start,
+        active.corner,
+        local,
+        desk,
+        systemSpec.grid,
+        { width: minWidth, height: minHeight },
+      );
+
+      setItems((current) =>
+        current.map((item) =>
+          item.id === active.id
+            ? { ...item, ...resized }
+            : item,
+        ),
+      );
+      return;
+    }
+
+    if (active.type === "move-route") {
+      const points = translateRoute(
+        active.startPoints,
+        local.x - active.startX,
+        local.y - active.startY,
+        desk,
+        systemSpec.grid,
+      ) as CableRoute["points"];
+      setRoutes((current) =>
+        current.map((route) =>
+          route.id === active.id
+            ? { ...route, points }
+            : route,
+        ),
+      );
+      return;
+    }
+
+    setRoutes((current) =>
+      current.map((route) =>
+        route.id === active.id
+          ? {
+              ...route,
+              points: moveRoutePoint(
+                route.points,
+                active.pointIndex,
+                local,
+                desk,
+                systemSpec.grid,
+              ) as CableRoute["points"],
+            }
+          : route,
       ),
     );
   }
 
   function handlePointerUp() {
-    if (drag.current) {
-      const moved = items.find((item) => item.id === drag.current?.id);
-      if (moved) {
-        emitLog("item.moved", {
-          itemId: moved.id,
-          x: moved.x,
-          y: moved.y,
-        });
+    const active = interaction.current;
+    if (!active) return;
+    if (active.type === "move-item" || active.type === "resize-item") {
+      const changed = items.find((item) => item.id === active.id);
+      if (changed) {
+        emitLog(
+          active.type === "move-item" ? "item.moved" : "item.resized",
+          {
+            itemId: changed.id,
+            x: changed.x,
+            y: changed.y,
+            width: changed.width,
+            height: changed.height,
+          },
+        );
+      }
+    } else {
+      const changed = routes.find((route) => route.id === active.id);
+      if (changed) {
+        emitLog(
+          active.type === "move-route" ? "route.moved" : "route.point_moved",
+          { routeId: changed.id, points: changed.points },
+        );
       }
     }
-    drag.current = null;
+    interaction.current = null;
   }
 
   function exportPlan() {
@@ -633,6 +906,8 @@ export default function Home() {
       setItems(plan.items);
       setRoutes(plan.routes);
       setSelectedId(plan.items[0]?.id ?? "");
+      setSelectedRouteId("");
+      setSelectedRoutePoint(null);
       showToast("Plan imported");
       emitLog("plan.imported", {
         fileName: file.name,
@@ -652,6 +927,8 @@ export default function Home() {
     checkpointHistory();
     setItems((current) => current.filter((item) => item.id !== selected.id));
     setSelectedId("");
+    setSelectedRouteId("");
+    setSelectedRoutePoint(null);
     showToast(`${selected.name} removed`);
     emitLog("item.deleted", { itemId: selected.id, kind: selected.kind });
   }
@@ -692,6 +969,10 @@ export default function Home() {
   function removeRoute(routeId: string) {
     checkpointHistory();
     setRoutes((current) => current.filter((route) => route.id !== routeId));
+    setSelectedRouteId((current) => (current === routeId ? "" : current));
+    setSelectedRoutePoint((current) =>
+      current?.routeId === routeId ? null : current,
+    );
     emitLog("route.deleted", { routeId });
   }
 
@@ -703,6 +984,42 @@ export default function Home() {
       ),
     );
     emitLog("route.updated", { routeId, ...patch });
+  }
+
+  function addRouteBend(route: CableRoute) {
+    checkpointHistory();
+    const points = insertRouteBend(route.points).map(([x, y]) => [
+      snapToGrid(x, systemSpec.grid),
+      snapToGrid(y, systemSpec.grid),
+    ]) as CableRoute["points"];
+    setRoutes((current) =>
+      current.map((entry) =>
+        entry.id === route.id ? { ...entry, points } : entry,
+      ),
+    );
+    setSelectedRoutePoint(null);
+    emitLog("route.bend_added", { routeId: route.id, points: points.length });
+  }
+
+  function removeSelectedBend() {
+    if (!selectedRoute || !selectedRoutePointIsBend) return;
+    checkpointHistory();
+    const points = removeRouteBend(
+      selectedRoute.points,
+      selectedRoutePointIndex,
+    ) as CableRoute["points"];
+    setRoutes((current) =>
+      current.map((route) =>
+        route.id === selectedRoute.id ? { ...route, points } : route,
+      ),
+    );
+    setSelectedRoutePoint(null);
+    showToast("Cable bend removed");
+    emitLog("route.bend_removed", {
+      routeId: selectedRoute.id,
+      pointIndex: selectedRoutePointIndex,
+      points: points.length,
+    });
   }
 
   function exportTrace() {
@@ -744,8 +1061,12 @@ export default function Home() {
         } else {
           undoPlan();
         }
-      } else if (!editing && event.key === "Delete" && selected) {
-        deleteSelected();
+      } else if (!editing && event.key === "Delete") {
+        if (selected) {
+          deleteSelected();
+        } else if (selectedRoute) {
+          removeRoute(selectedRoute.id);
+        }
       } else if (!editing && event.key.toLowerCase() === "r" && selected) {
         rotateSelected(
           ([0, 90, 180, 270] as const)[
@@ -880,9 +1201,13 @@ export default function Home() {
               onPointerMove={handlePointerMove}
               onPointerUp={handlePointerUp}
               onPointerCancel={() => {
-                drag.current = null;
+                interaction.current = null;
               }}
-              onPointerDown={() => setSelectedId("")}
+              onPointerDown={() => {
+                setSelectedId("");
+                setSelectedRouteId("");
+                setSelectedRoutePoint(null);
+              }}
             >
               <defs>
                 <pattern
@@ -941,7 +1266,19 @@ export default function Home() {
               />
 
               {routes.map((route) => (
-                <g key={route.id} className="route">
+                <g
+                  key={route.id}
+                  className={`route ${
+                    selectedRouteId === route.id ? "selected" : ""
+                  }`}
+                >
+                  <polyline
+                    points={route.points.map((point) => point.join(",")).join(" ")}
+                    className="route-hit"
+                    onPointerDown={(event) =>
+                      handleRoutePointerDown(event, route)
+                    }
+                  />
                   <polyline
                     points={route.points.map((point) => point.join(",")).join(" ")}
                     className="route-halo"
@@ -951,6 +1288,14 @@ export default function Home() {
                     stroke={route.color}
                     strokeWidth={route.diameter + 3}
                   />
+                  {selectedRouteId === route.id && (
+                    <polyline
+                      points={route.points
+                        .map((point) => point.join(","))
+                        .join(" ")}
+                      className="route-selection"
+                    />
+                  )}
                 </g>
               ))}
 
@@ -968,6 +1313,8 @@ export default function Home() {
                   onKeyDown={(event) => {
                     if (event.key === "Enter" || event.key === " ") {
                       setSelectedId(item.id);
+                      setSelectedRouteId("");
+                      setSelectedRoutePoint(null);
                     }
                   }}
                 >
@@ -1004,12 +1351,16 @@ export default function Home() {
                   )}
                   {item.kind === "power-brick" && (
                     <>
-                      {Array.from({ length: 6 }).map((_, index) => (
+                      {getPowerBrickOutletLayout(
+                        item.width,
+                        item.height,
+                        item.outlets ?? 6,
+                      ).map((outlet, index) => (
                         <circle
                           key={index}
-                          cx={item.x + 48 + index * 64}
-                          cy={item.y + item.height / 2}
-                          r="17"
+                          cx={item.x + outlet.x}
+                          cy={item.y + outlet.y}
+                          r={outlet.radius}
                           className="outlet"
                         />
                       ))}
@@ -1055,24 +1406,64 @@ export default function Home() {
                         className="selection-outline"
                       />
                       {[
-                        [item.x - 6, item.y - 6],
-                        [item.x + item.width + 6, item.y - 6],
-                        [item.x - 6, item.y + item.height + 6],
-                        [item.x + item.width + 6, item.y + item.height + 6],
-                      ].map(([x, y], index) => (
+                        ["nw", item.x - 6, item.y - 6],
+                        ["ne", item.x + item.width + 6, item.y - 6],
+                        ["sw", item.x - 6, item.y + item.height + 6],
+                        [
+                          "se",
+                          item.x + item.width + 6,
+                          item.y + item.height + 6,
+                        ],
+                      ].map(([corner, x, y]) => (
                         <rect
-                          key={index}
-                          x={x - 6}
-                          y={y - 6}
-                          width="12"
-                          height="12"
-                          className="selection-handle"
+                          key={corner}
+                          x={Number(x) - 7}
+                          y={Number(y) - 7}
+                          width="14"
+                          height="14"
+                          className={`selection-handle resize-${corner}`}
+                          onPointerDown={(event) =>
+                            handleResizePointerDown(
+                              event,
+                              item,
+                              corner as ResizeCorner,
+                            )
+                          }
+                          aria-label={`Resize ${item.name} from ${corner} corner`}
                         />
                       ))}
                     </>
                   )}
                 </g>
               ))}
+
+              {selectedRoute && (
+                <g className="route-points" aria-label="Cable route control points">
+                  {selectedRoute.points.map(([x, y], index) => (
+                    <circle
+                      key={`${selectedRoute.id}-${index}`}
+                      cx={x}
+                      cy={y}
+                      r="10"
+                      className={`route-point ${
+                        selectedRoutePointIndex === index ? "selected" : ""
+                      }`}
+                      onPointerDown={(event) =>
+                        handleRoutePointPointerDown(
+                          event,
+                          selectedRoute.id,
+                          index,
+                        )
+                      }
+                      aria-label={
+                        index > 0 && index < selectedRoute.points.length - 1
+                          ? `Select or move ${selectedRoute.name} bend ${index}`
+                          : `Move ${selectedRoute.name} endpoint ${index + 1}`
+                      }
+                    />
+                  ))}
+                </g>
+              )}
             </svg>
           </div>
         </div>
@@ -1152,14 +1543,110 @@ export default function Home() {
         <div className="inspector-header">
           <div>
             <span className="eyebrow">Selection</span>
-            <strong>{selected?.name ?? "Nothing selected"}</strong>
+            {selected || selectedRoute ? (
+              <label className="selection-name">
+                <span className="sr-only">Selection name</span>
+                <input
+                  value={selected?.name ?? selectedRoute?.name ?? ""}
+                  onFocus={beginSelectionNameEdit}
+                  onChange={(event) => changeSelectionName(event.target.value)}
+                  onBlur={finishSelectionNameEdit}
+                  aria-label={`Rename ${
+                    selected?.name ?? selectedRoute?.name ?? "selection"
+                  }`}
+                />
+                <span aria-hidden="true">✎</span>
+              </label>
+            ) : (
+              <strong>Nothing selected</strong>
+            )}
           </div>
-          {selected && (
-            <span className="selection-type">{selected.kind.replace("-", " ")}</span>
+          {(selected || selectedRoute) && (
+            <span className="selection-type">
+              {selected ? selected.kind.replace("-", " ") : "cable route"}
+            </span>
           )}
         </div>
 
-        {selected ? (
+        {selectedRoute ? (
+          <>
+            <section className="inspector-section route-editor">
+              <h2>Route geometry</h2>
+              <div className="route-stats">
+                <span>
+                  <strong>{selectedRoute.points.length}</strong>
+                  control points
+                </span>
+                <span>
+                  <strong>{selectedRouteLength} mm</strong>
+                  route length
+                </span>
+              </div>
+              <p>
+                Drag the cable line to move the whole route. Drag a blue point
+                to change its start, end, or bends. Click a bend to select it
+                for removal.
+              </p>
+              {selectedRoutePointIndex !== null && (
+                <div className="bend-selection">
+                  <span>
+                    <strong>
+                      {selectedRoutePointIsBend
+                        ? `Bend ${selectedRoutePointIndex}`
+                        : "Route endpoint"}
+                    </strong>
+                    {selectedRoutePointIsBend
+                      ? "Selected control point"
+                      : "Endpoints cannot be removed"}
+                  </span>
+                  {selectedRoutePointIsBend && (
+                    <button
+                      type="button"
+                      className="danger"
+                      onClick={removeSelectedBend}
+                    >
+                      Remove bend
+                    </button>
+                  )}
+                </div>
+              )}
+            </section>
+            <section className="inspector-section">
+              <h2>Cable</h2>
+              <div className="field-grid route-fields">
+                <label>
+                  <span>Ø</span>
+                  <span className="input-unit">
+                    <input
+                      type="number"
+                      min="1"
+                      max="30"
+                      value={selectedRoute.diameter}
+                      onChange={(event) =>
+                        updateRoute(selectedRoute.id, {
+                          diameter: Number(event.target.value),
+                        })
+                      }
+                    />
+                    <i>mm</i>
+                  </span>
+                </label>
+              </div>
+            </section>
+            <section className="inspector-actions">
+              <button type="button" onClick={() => addRouteBend(selectedRoute)}>
+                Add bend
+              </button>
+              <button
+                type="button"
+                className="danger"
+                onClick={() => removeRoute(selectedRoute.id)}
+              >
+                Delete
+              </button>
+            </section>
+          </>
+        ) : selected ? (
           <>
             <section className="inspector-section">
               <h2>Position</h2>
@@ -1287,6 +1774,30 @@ export default function Home() {
               </section>
             )}
 
+            {selected.kind === "power-brick" && (
+              <section className="inspector-section">
+                <div className="section-heading">
+                  <h2>Outlet layout</h2>
+                  <strong>{selected.outlets ?? 6} outlets</strong>
+                </div>
+                <input
+                  className="capacity-range"
+                  type="range"
+                  min="1"
+                  max="16"
+                  value={selected.outlets ?? 6}
+                  onChange={(event) =>
+                    updateSelected({ outlets: Number(event.target.value) })
+                  }
+                  aria-label="Power brick outlet count"
+                />
+                <p>
+                  Outlets reflow and scale automatically to fit the brick
+                  dimensions.
+                </p>
+              </section>
+            )}
+
             <section className="inspector-actions">
               <button
                 type="button"
@@ -1301,6 +1812,8 @@ export default function Home() {
                   };
                   setItems((current) => [...current, copy]);
                   setSelectedId(copy.id);
+                  setSelectedRouteId("");
+                  setSelectedRoutePoint(null);
                   emitLog("item.duplicated", {
                     sourceId: selected.id,
                     itemId: copy.id,
@@ -1329,7 +1842,15 @@ export default function Home() {
           </div>
           <div className="route-list">
             {routes.map((route) => (
-              <div key={route.id}>
+              <div
+                key={route.id}
+                className={selectedRouteId === route.id ? "active" : ""}
+                onClick={() => {
+                  setSelectedId("");
+                  setSelectedRouteId(route.id);
+                  setSelectedRoutePoint(null);
+                }}
+              >
                 <i style={{ background: route.color }} aria-hidden="true" />
                 <label>
                   <span className="sr-only">Route name</span>

@@ -563,10 +563,6 @@ button.primary:hover {
   text-transform: uppercase;
 }
 
-.route {
-  pointer-events: none;
-}
-
 .route polyline {
   fill: none;
   stroke-linecap: round;
@@ -574,9 +570,45 @@ button.primary:hover {
   vector-effect: non-scaling-stroke;
 }
 
+.route-hit {
+  pointer-events: stroke;
+  stroke: transparent;
+  stroke-width: 32;
+  cursor: grab;
+}
+
+.route-hit:active {
+  cursor: grabbing;
+}
+
 .route-halo {
   stroke: rgba(2, 7, 11, 0.8);
   stroke-width: 18;
+  pointer-events: none;
+}
+
+.route > polyline:not(.route-hit) {
+  pointer-events: none;
+}
+
+.route-selection {
+  stroke: var(--blue);
+  stroke-width: 2;
+  stroke-dasharray: 7 7;
+}
+
+.route-point {
+  fill: white;
+  stroke: var(--blue);
+  stroke-width: 4;
+  vector-effect: non-scaling-stroke;
+  cursor: move;
+}
+
+.route-point.selected {
+  fill: var(--blue);
+  stroke: white;
+  stroke-width: 5;
 }
 
 .selection-outline {
@@ -591,6 +623,17 @@ button.primary:hover {
   stroke: var(--blue);
   stroke-width: 3;
   vector-effect: non-scaling-stroke;
+  pointer-events: all;
+}
+
+.resize-nw,
+.resize-se {
+  cursor: nwse-resize;
+}
+
+.resize-ne,
+.resize-sw {
+  cursor: nesw-resize;
 }
 
 .canvas-controls {
@@ -743,6 +786,36 @@ button.primary:hover {
   font-size: 14px;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.selection-name {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 7px;
+}
+
+.selection-name input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  border-bottom: 1px solid transparent;
+  outline: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.selection-name input:hover,
+.selection-name input:focus {
+  border-bottom-color: var(--blue);
+}
+
+.selection-name > span:last-child {
+  color: var(--muted);
+  font-size: 11px;
 }
 
 .selection-type {
@@ -929,6 +1002,13 @@ button.primary:hover {
   gap: 8px;
   min-height: 40px;
   border-bottom: 1px solid rgba(48, 70, 90, 0.42);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.route-list > div.active {
+  background: rgba(21, 151, 255, 0.1);
+  box-shadow: inset 2px 0 0 var(--blue);
 }
 
 .route-list > div > i {
@@ -974,6 +1054,79 @@ button.primary:hover {
 
 .route-list button:hover {
   color: var(--danger);
+}
+
+.route-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.route-stats span {
+  display: flex;
+  min-height: 60px;
+  flex-direction: column;
+  justify-content: center;
+  gap: 5px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #08131e;
+  color: var(--muted);
+  font-size: 9px;
+  text-transform: uppercase;
+}
+
+.route-stats strong {
+  color: var(--text);
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 11px;
+}
+
+.route-fields {
+  grid-template-columns: 1fr;
+}
+
+.bend-selection {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 12px;
+  padding: 10px;
+  border: 1px solid rgba(21, 151, 255, 0.36);
+  border-radius: 8px;
+  background: rgba(21, 151, 255, 0.09);
+}
+
+.bend-selection > span {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.bend-selection strong {
+  color: var(--text);
+  font-size: 11px;
+}
+
+.bend-selection button {
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid rgba(255, 101, 101, 0.45);
+  border-radius: 7px;
+  background: transparent;
+  color: #ff9393;
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.bend-selection button:hover {
+  background: rgba(255, 101, 101, 0.1);
 }
 
 .empty-selection {
