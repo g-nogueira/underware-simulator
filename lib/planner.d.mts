@@ -63,6 +63,39 @@ export function moveRoutePoint(
   gridSize: number,
 ): Array<[number, number]>;
 
+export type LayerEntry = {
+  id: string;
+  type: "item" | "route";
+  layer: number;
+};
+
+export function buildLayerStack(
+  items: Array<{ id: string; layer?: number }>,
+  routes: Array<{ id: string; layer?: number }>,
+): LayerEntry[];
+
+export function reorderLayerStack(
+  items: Array<{ id: string; layer?: number }>,
+  routes: Array<{ id: string; layer?: number }>,
+  selection: { id: string; type: "item" | "route" },
+  movement: "back" | "backward" | "forward" | "front",
+): LayerEntry[];
+
+export function calculateGridTilePlan(
+  width: number,
+  height: number,
+  tileSize?: number,
+  maxTileCellsX?: number,
+  maxTileCellsY?: number,
+): {
+  cellsX: number;
+  cellsY: number;
+  columns: number;
+  rows: number;
+  tileCount: number;
+  groups: Array<{ label: string; count: number }>;
+};
+
 export function calculatePrintPlan(
   items: Array<{
     id: string;
@@ -71,6 +104,9 @@ export function calculatePrintPlan(
     width: number;
     height: number;
     cables?: number;
+    catalogId?: string;
+    maxTileCellsX?: number;
+    maxTileCellsY?: number;
   }>,
   systemId: SystemId,
 ): {
@@ -79,6 +115,7 @@ export function calculatePrintPlan(
   filamentGrams: number;
   groups: Array<{ label: string; count: number }>;
   overCapacityIds: string[];
+  gridTilesCount: number;
 };
 
 export function validatePlanFile(value: unknown):
