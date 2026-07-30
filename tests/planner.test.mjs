@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  buildLayerStack,
+  calculateGridTilePlan,
   calculateRouteLength,
   calculatePrintPlan,
   clampToDesk,
@@ -10,6 +12,7 @@ import {
   insertRouteBend,
   moveRoutePoint,
   removeRouteBend,
+  reorderLayerStack,
   resizeItemFromCorner,
   snapToGrid,
   translateRoute,
@@ -184,6 +187,81 @@ test("builds a grouped print list and excludes obstacles", () => {
     { label: "Straight channel · 168 mm", count: 2 },
   ]);
   assert.deepEqual(result.overCapacityIds, ["one"]);
+  assert.equal(result.gridTilesCount, 0);
+});
+
+test("splits openGrid coverage into exact printable baseplate sizes", () => {
+  const result = calculateGridTilePlan(560, 280, 28, 8, 8);
+
+  assert.deepEqual(
+    {
+      cellsX: result.cellsX,
+      cellsY: result.cellsY,
+      columns: result.columns,
+      rows: result.rows,
+      tileCount: result.tileCount,
+    },
+    { cellsX: 20, cellsY: 10, columns: 3, rows: 2, tileCount: 6 },
+  );
+  assert.deepEqual(result.groups, [
+    { label: "8 × 8 cells (224 × 224 mm)", count: 2 },
+    { label: "4 × 8 cells (112 × 224 mm)", count: 1 },
+    { label: "8 × 2 cells (224 × 56 mm)", count: 2 },
+    { label: "4 × 2 cells (112 × 56 mm)", count: 1 },
+  ]);
+});
+
+test("counts generated openGrid baseplates as individual print parts", () => {
+  const result = calculatePrintPlan(
+    [
+      {
+        id: "grid",
+        kind: "grid",
+        name: "Main mounting grid",
+        catalogId: "opengrid-baseplate",
+        width: 560,
+        height: 280,
+        maxTileCellsX: 8,
+        maxTileCellsY: 8,
+      },
+      {
+        id: "loop",
+        kind: "cable-loop",
+        name: "Monitor cable loop",
+        catalogId: "cable-loop",
+        width: 56,
+        height: 56,
+      },
+    ],
+    "openGrid",
+  );
+
+  assert.equal(result.gridTilesCount, 6);
+  assert.equal(result.partsCount, 7);
+  assert.deepEqual(result.groups.at(-1), { label: "Cable loop", count: 1 });
+});
+
+test("reorders items and routes in one shared layer stack", () => {
+  const items = [
+    { id: "grid", layer: 0 },
+    { id: "brick", layer: 2 },
+  ];
+  const routes = [{ id: "power", layer: 1 }];
+
+  assert.deepEqual(
+    buildLayerStack(items, routes).map(({ id, type }) => `${type}:${id}`),
+    ["item:grid", "route:power", "item:brick"],
+  );
+
+  assert.deepEqual(
+    reorderLayerStack(
+      items,
+      routes,
+      { id: "brick", type: "item" },
+      "backward",
+    ).map(({ id, type }) => `${type}:${id}`),
+    ["item:grid", "item:brick", "route:power"],
+  );
 });
 
 test("rejects malformed imported plans", () => {
