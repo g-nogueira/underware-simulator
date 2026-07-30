@@ -8,6 +8,7 @@ import {
   calculatePrintPlan,
   clampToDesk,
   getCapacityState,
+  getChannelGeometry,
   getPowerBrickOutletLayout,
   insertRouteBend,
   moveRoutePoint,
@@ -61,6 +62,45 @@ test("reflows outlet symbols and respects the configured count", () => {
   assert.equal(new Set(wide.map((outlet) => outlet.y)).size, 1);
   assert.equal(compact.length, 4);
   assert.equal(new Set(compact.map((outlet) => outlet.y)).size, 2);
+});
+
+test("renders L and T junctions with their actual channel footprints", () => {
+  const bounds = {
+    x: 100,
+    y: 100,
+    width: 112,
+    height: 112,
+    rotation: 0,
+  };
+  const lJunction = getChannelGeometry({
+    ...bounds,
+    catalogId: "l-channel",
+  });
+  const tJunction = getChannelGeometry({
+    ...bounds,
+    catalogId: "t-channel",
+  });
+
+  assert.equal(lJunction.paths.length, 1);
+  assert.match(lJunction.paths[0], / V .* H /);
+  assert.equal(tJunction.paths.length, 2);
+  assert.match(tJunction.paths[0], / H /);
+  assert.match(tJunction.paths[1], / V /);
+  assert.ok(lJunction.branchWidth < bounds.width);
+  assert.ok(tJunction.branchWidth < bounds.width);
+});
+
+test("rotates junction footprints inside their existing item bounds", () => {
+  const geometry = getChannelGeometry({
+    x: 40,
+    y: 60,
+    width: 112,
+    height: 112,
+    rotation: 90,
+    catalogId: "t-channel",
+  });
+
+  assert.equal(geometry.transform, "rotate(90 96 116)");
 });
 
 test("calculates route length and inserts a bend in its longest segment", () => {

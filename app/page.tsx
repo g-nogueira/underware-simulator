@@ -15,6 +15,7 @@ import {
   calculateRouteLength,
   calculatePrintPlan,
   getCapacityState,
+  getChannelGeometry,
   getPowerBrickOutletLayout,
   insertRouteBend,
   moveRoutePoint,
@@ -420,36 +421,6 @@ function clamp(value: number, min: number, max: number) {
 
 function makeId(prefix: string) {
   return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-}
-
-function getChannelPaths(item: PlannerItem) {
-  const left = item.x + 20;
-  const right = item.x + item.width - 20;
-  const top = item.y + 20;
-  const bottom = item.y + item.height - 20;
-  const middleX = item.x + item.width / 2;
-  const middleY = item.y + item.height / 2;
-
-  switch (item.catalogId) {
-    case "l-channel":
-      return [`M ${left} ${bottom} V ${top} H ${right}`];
-    case "t-channel":
-      return [
-        `M ${left} ${top} H ${right}`,
-        `M ${middleX} ${top} V ${bottom}`,
-      ];
-    case "x-channel":
-      return [
-        `M ${left} ${middleY} H ${right}`,
-        `M ${middleX} ${top} V ${bottom}`,
-      ];
-    case "s-channel":
-      return [
-        `M ${left} ${bottom} C ${middleX} ${bottom}, ${middleX} ${top}, ${right} ${top}`,
-      ];
-    default:
-      return [`M ${left} ${middleY} H ${right}`];
-  }
 }
 
 export default function Home() {
@@ -1429,6 +1400,14 @@ export default function Home() {
             item.maxTileCellsY ?? 8,
           ) as { cellsX: number; cellsY: number; tileCount: number })
         : null;
+    const channelGeometry =
+      item.kind === "channel"
+        ? (getChannelGeometry(item) as {
+            paths: string[];
+            branchWidth: number;
+            transform?: string;
+          })
+        : null;
     return (
       <g
         key={`item:${item.id}`}
@@ -1448,15 +1427,25 @@ export default function Home() {
           }
         }}
       >
-        <rect
-          x={item.x}
-          y={item.y}
-          width={item.width}
-          height={item.height}
-          rx={item.kind === "channel" ? 12 : 18}
-          className="item-body"
-          fill={item.kind === "grid" ? "url(#open-grid-plate)" : undefined}
-        />
+        {item.kind === "channel" ? (
+          <rect
+            x={item.x}
+            y={item.y}
+            width={item.width}
+            height={item.height}
+            className="channel-hit-area"
+          />
+        ) : (
+          <rect
+            x={item.x}
+            y={item.y}
+            width={item.width}
+            height={item.height}
+            rx="18"
+            className="item-body"
+            fill={item.kind === "grid" ? "url(#open-grid-plate)" : undefined}
+          />
+        )}
         {item.kind === "grid" && gridPlan && (
           <>
             <text
@@ -1478,24 +1467,24 @@ export default function Home() {
             </text>
           </>
         )}
-        {item.kind === "channel" && (
-          <>
-            {getChannelPaths(item).map((path) => (
-              <path key={path} d={path} className="channel-core" />
+        {channelGeometry && (
+          <g transform={channelGeometry.transform}>
+            {channelGeometry.paths.map((path, index) => (
+              <g key={`${index}-${path}`}>
+                <path
+                  d={path}
+                  className="channel-shell-outline"
+                  strokeWidth={channelGeometry.branchWidth + 4}
+                />
+                <path
+                  d={path}
+                  className="channel-shell"
+                  strokeWidth={channelGeometry.branchWidth}
+                />
+                <path d={path} className="channel-core" />
+              </g>
             ))}
-            {Array.from({
-              length: Math.max(2, Math.floor(item.width / 54)),
-            }).map((_, index) => (
-              <line
-                key={index}
-                x1={item.x + 22 + index * 52}
-                y1={item.y + 12}
-                x2={item.x + 22 + index * 52}
-                y2={item.y + item.height - 12}
-                className="channel-rib"
-              />
-            ))}
-          </>
+          </g>
         )}
         {item.kind === "cable-loop" && (
           <>

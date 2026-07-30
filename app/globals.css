@@ -665,9 +665,25 @@ button.primary:hover {
   text-transform: uppercase;
 }
 
-.item-channel .item-body {
-  fill: #172531;
+.channel-hit-area {
+  fill: transparent;
+  stroke: none;
+  pointer-events: all;
+}
+
+.channel-shell-outline,
+.channel-shell {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.channel-shell-outline {
   stroke: #82919d;
+}
+
+.channel-shell {
+  stroke: #172531;
 }
 
 .item-cable-loop .item-body {
@@ -696,11 +712,6 @@ button.primary:hover {
   stroke-width: 8;
   stroke-linecap: round;
   stroke-linejoin: round;
-}
-
-.channel-rib {
-  stroke: #687887;
-  stroke-width: 2;
 }
 
 .cable-loop-ring {
