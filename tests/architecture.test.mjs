@@ -37,9 +37,12 @@ test("keeps mutable implementation details behind the planner facade", async () 
   const controller = await source(
     "features/planner/application/use-planner-controller.ts",
   );
-  const facade = controller.match(
-    /\n  return \{\n    partCatalog:[\s\S]*?\n  \};\n\}\n\nexport type PlannerFacade/,
-  )?.[0];
+  const exportIndex = controller.indexOf("export type PlannerFacade");
+  const facadeStart = controller.lastIndexOf("return {", exportIndex);
+  const facade =
+    facadeStart >= 0 && exportIndex >= 0
+      ? controller.slice(facadeStart, exportIndex)
+      : "";
 
   assert.ok(facade, "planner facade return block should remain explicit");
   assert.doesNotMatch(facade, /\bset[A-Z]\w*\b/);

@@ -176,7 +176,7 @@ export const BUILT_IN_PARTS = [
     },
     Renderer: PowerBrickRenderer,
     InspectorSections: [PowerBrickOutletInspector],
-    defaults: { outlets: 4 },
+    defaults: { outlets: 6 },
     placement: {
       grid: "active-system",
       layer: "front",

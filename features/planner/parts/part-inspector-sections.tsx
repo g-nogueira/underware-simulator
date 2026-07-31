@@ -7,6 +7,17 @@ import {
 import { usePlanner } from "../application/planner-provider";
 import type { PartInspectorProps } from "./contracts";
 
+function parsePositiveNumber(
+  value: string,
+  fallback: number,
+  max = Infinity,
+) {
+  if (value.trim() === "") return fallback;
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.min(Math.max(1, parsed), max);
+}
+
 export function GridCoverageInspector({ item }: PartInspectorProps) {
   const { updateSelected } = usePlanner();
   const plan =
@@ -58,7 +69,7 @@ export function GridCoverageInspector({ item }: PartInspectorProps) {
               onChange={(event) =>
                 updateSelected({
                   width:
-                    Math.max(1, Number(event.target.value)) *
+                    parsePositiveNumber(event.target.value, plan.cellsX) *
                     SYSTEM_SPECS.openGrid.grid,
                 })
               }
@@ -75,7 +86,7 @@ export function GridCoverageInspector({ item }: PartInspectorProps) {
               onChange={(event) =>
                 updateSelected({
                   height:
-                    Math.max(1, Number(event.target.value)) *
+                    parsePositiveNumber(event.target.value, plan.cellsY) *
                     SYSTEM_SPECS.openGrid.grid,
                 })
               }
@@ -92,7 +103,11 @@ export function GridCoverageInspector({ item }: PartInspectorProps) {
               value={item.maxTileCellsX ?? 8}
               onChange={(event) =>
                 updateSelected({
-                  maxTileCellsX: Math.max(1, Number(event.target.value)),
+                  maxTileCellsX: parsePositiveNumber(
+                    event.target.value,
+                    item.maxTileCellsX ?? 8,
+                    20,
+                  ),
                 })
               }
             />
@@ -108,7 +123,11 @@ export function GridCoverageInspector({ item }: PartInspectorProps) {
               value={item.maxTileCellsY ?? 8}
               onChange={(event) =>
                 updateSelected({
-                  maxTileCellsY: Math.max(1, Number(event.target.value)),
+                  maxTileCellsY: parsePositiveNumber(
+                    event.target.value,
+                    item.maxTileCellsY ?? 8,
+                    20,
+                  ),
                 })
               }
             />

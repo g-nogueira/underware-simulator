@@ -25,8 +25,13 @@ function downloadJson(fileName: string, value: unknown) {
   const anchor = document.createElement("a");
   anchor.href = url;
   anchor.download = fileName;
-  anchor.click();
-  URL.revokeObjectURL(url);
+  document.body.append(anchor);
+  try {
+    anchor.click();
+  } finally {
+    anchor.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 0);
+  }
 }
 
 /**

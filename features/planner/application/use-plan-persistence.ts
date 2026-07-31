@@ -19,7 +19,9 @@ type PlanPersistenceOptions = {
   routes: CableRoute[];
   restorePlan: (plan: PlanFile) => void;
   checkpointHistory: () => void;
-  initializeTrace: (event: string) => void;
+  initializeTrace: (
+    event: "plan.started" | "plan.autosave_restored",
+  ) => void;
   showToast: (message: string) => void;
   emitLog: (
     event: string,
@@ -27,6 +29,22 @@ type PlanPersistenceOptions = {
     level?: "info" | "warn",
   ) => void;
 };
+
+type StorageAttempt<T> =
+  | { ok: true; value: T }
+  | { ok: false; error: unknown };
+
+function attemptStorage<T>(operation: () => T): StorageAttempt<T> {
+  try {
+    return { ok: true, value: operation() };
+  } catch (error) {
+    return { ok: false, error };
+  }
+}
+
+function errorMessage(error: unknown) {
+  return error instanceof Error ? error.message : "unknown";
+}
 
 /** Owns the browser-storage and portable-file boundary for a plan. */
 export function usePlanPersistence(options: PlanPersistenceOptions) {
@@ -41,23 +59,46 @@ export function usePlanPersistence(options: PlanPersistenceOptions) {
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
       const current = optionsRef.current;
-      const saved = window.localStorage.getItem(AUTOSAVE_KEY);
-      if (saved) {
+      const saved = attemptStorage(() =>
+        window.localStorage.getItem(AUTOSAVE_KEY),
+      );
+      let restored = false;
+      let removalFailure: unknown;
+      if (saved.ok && saved.value) {
         try {
-          const result = validatePlanFile(JSON.parse(saved)) as {
+          const result = validatePlanFile(JSON.parse(saved.value)) as {
             ok: boolean;
             plan?: PlanFile;
           };
           if (result.ok && result.plan) {
             current.restorePlan(result.plan);
             setSavedAt(result.plan.savedAt ?? "restored");
+            restored = true;
           }
         } catch {
-          window.localStorage.removeItem(AUTOSAVE_KEY);
+          const removed = attemptStorage(() =>
+            window.localStorage.removeItem(AUTOSAVE_KEY),
+          );
+          if (!removed.ok) removalFailure = removed.error;
         }
       }
 
-      current.initializeTrace(saved ? "plan.autosave_restored" : "plan.started");
+      current.initializeTrace(
+        restored ? "plan.autosave_restored" : "plan.started",
+      );
+      if (!saved.ok) {
+        current.emitLog(
+          "plan.autosave_read_failed",
+          { reason: errorMessage(saved.error) },
+          "warn",
+        );
+      } else if (removalFailure) {
+        current.emitLog(
+          "plan.autosave_cleanup_failed",
+          { reason: errorMessage(removalFailure) },
+          "warn",
+        );
+      }
       setReadyToSave(true);
     });
     return () => window.cancelAnimationFrame(frame);
@@ -77,7 +118,17 @@ export function usePlanPersistence(options: PlanPersistenceOptions) {
         routes: current.routes,
         savedAt: timestamp,
       };
-      window.localStorage.setItem(AUTOSAVE_KEY, JSON.stringify(plan));
+      const saved = attemptStorage(() =>
+        window.localStorage.setItem(AUTOSAVE_KEY, JSON.stringify(plan)),
+      );
+      if (!saved.ok) {
+        current.emitLog(
+          "plan.autosave_failed",
+          { reason: errorMessage(saved.error) },
+          "warn",
+        );
+        return;
+      }
       setSavedAt(timestamp);
     }, 350);
     return () => window.clearTimeout(timeout);
@@ -110,8 +161,13 @@ export function usePlanPersistence(options: PlanPersistenceOptions) {
     anchor.download = `${current.planName
       .toLowerCase()
       .replaceAll(/[^a-z0-9]+/g, "-")}.underware-plan.json`;
-    anchor.click();
-    URL.revokeObjectURL(url);
+    document.body.append(anchor);
+    try {
+      anchor.click();
+    } finally {
+      anchor.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 0);
+    }
     current.showToast("Plan exported");
     current.emitLog("plan.exported", {
       items: current.items.length,
@@ -138,9 +194,13 @@ export function usePlanPersistence(options: PlanPersistenceOptions) {
         items: result.plan.items.length,
         routes: result.plan.routes.length,
       });
-    } catch {
+    } catch (error) {
       current.showToast("That file is not a valid Route Lab plan");
-      current.emitLog("plan.import_failed", { fileName: file.name }, "warn");
+      current.emitLog(
+        "plan.import_failed",
+        { fileName: file.name, reason: errorMessage(error) },
+        "warn",
+      );
     } finally {
       event.target.value = "";
     }

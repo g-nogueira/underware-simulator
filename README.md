@@ -37,8 +37,9 @@ The planner is a vertical feature under `features/planner`:
   controller and contexts.
 - `components/` owns editor surfaces and generic extension hosts. The route
   entry point delegates immediately to this feature.
-- `lib/planner.mjs` remains the framework-independent geometry, validation,
-  and print-plan engine covered by Node tests.
+
+The sibling `lib/planner.mjs` module remains the framework-independent geometry,
+validation, and print-plan engine covered by Node tests.
 
 `PlannerPage` is the composition root. It injects a `PartRegistry` into the
 planner rather than letting application code import built-in parts. Each part

@@ -452,6 +452,40 @@ test("uses injected part print behaviour without changing the engine", () => {
   assert.deepEqual(result.overCapacityIds, ["custom"]);
 });
 
+test("honours an injected channel definition that opts out of capacity", () => {
+  const result = calculatePrintPlan(
+    [
+      {
+        id: "custom",
+        kind: "channel",
+        name: "User-facing name",
+        catalogId: "third-party-channel",
+        width: 140,
+        height: 56,
+        cables: 99,
+      },
+    ],
+    "openGrid",
+    [
+      {
+        id: "third-party-channel",
+        name: "Third-party channel",
+        strategy: "linear",
+        capacity: "none",
+      },
+    ],
+  );
+
+  assert.deepEqual(result.groups, [
+    {
+      label: "Third-party channel · 140 mm",
+      count: 1,
+      catalogId: "third-party-channel",
+    },
+  ]);
+  assert.deepEqual(result.overCapacityIds, []);
+});
+
 test("reorders items and routes in one shared layer stack", () => {
   const items = [
     { id: "grid", layer: 0 },

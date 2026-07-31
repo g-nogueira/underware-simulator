@@ -35,7 +35,11 @@ export function PlannerHeader() {
         <span aria-hidden="true">✎</span>
       </label>
 
-      <div className="system-switch" aria-label="Mounting system">
+      <div
+        className="system-switch"
+        role="group"
+        aria-label="Mounting system"
+      >
         {(Object.keys(SYSTEMS) as SystemId[]).map((id) => (
           <button
             type="button"
@@ -57,6 +61,8 @@ export function PlannerHeader() {
           type="file"
           accept=".json,application/json"
           onChange={importPlan}
+          tabIndex={-1}
+          aria-hidden="true"
         />
         <button type="button" onClick={() => fileInput.current?.click()}>
           <span aria-hidden="true">↓</span> Import

@@ -1,15 +1,93 @@
 "use client";
 
+import { useEffect, useRef } from "react";
+
 import {
   usePartRegistry,
-  type PlannerFacade,
+  usePlanner,
 } from "../application/planner-provider";
 
-export function PlannerOverlays({
-  planner,
-}: {
-  planner: PlannerFacade;
-}) {
+const FOCUSABLE_SELECTOR = [
+  "a[href]",
+  "button:not([disabled])",
+  "input:not([disabled]):not([type='hidden'])",
+  "select:not([disabled])",
+  "textarea:not([disabled])",
+  "[tabindex]:not([tabindex='-1'])",
+].join(",");
+
+function useDialogFocus(open: boolean, onClose: () => void) {
+  const dialogRef = useRef<HTMLElement>(null);
+  const closeRef = useRef(onClose);
+
+  useEffect(() => {
+    closeRef.current = onClose;
+  }, [onClose]);
+
+  useEffect(() => {
+    if (!open) return;
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+    const previousFocus =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
+    const initialFocus =
+      dialog.querySelector<HTMLElement>("[data-dialog-initial-focus]") ??
+      dialog.querySelector<HTMLElement>(FOCUSABLE_SELECTOR) ??
+      dialog;
+    initialFocus.focus();
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closeRef.current();
+        return;
+      }
+      if (event.key !== "Tab") return;
+
+      const focusable = Array.from(
+        dialog!.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR),
+      ).filter(
+        (element) =>
+          !element.hasAttribute("hidden") &&
+          element.getAttribute("aria-hidden") !== "true",
+      );
+      if (focusable.length === 0) {
+        event.preventDefault();
+        dialog!.focus();
+        return;
+      }
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      const focusIsOutside = !dialog!.contains(document.activeElement);
+      if (
+        event.shiftKey &&
+        (document.activeElement === first || focusIsOutside)
+      ) {
+        event.preventDefault();
+        last.focus();
+      } else if (
+        !event.shiftKey &&
+        (document.activeElement === last || focusIsOutside)
+      ) {
+        event.preventDefault();
+        first.focus();
+      }
+    }
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      previousFocus?.focus();
+    };
+  }, [open]);
+
+  return dialogRef;
+}
+
+export function PlannerOverlays() {
+  const planner = usePlanner();
   const partRegistry = usePartRegistry();
   const {
     deskDraft,
@@ -29,6 +107,9 @@ export function PlannerOverlays({
     closePrintPlan,
     closeTrace,
   } = planner;
+  const deskDialogRef = useDialogFocus(deskOpen, closeDeskSetup);
+  const printDialogRef = useDialogFocus(printOpen, closePrintPlan);
+  const traceDialogRef = useDialogFocus(traceOpen, closeTrace);
 
   return (
     <>
@@ -39,10 +120,12 @@ export function PlannerOverlays({
           onMouseDown={closeDeskSetup}
         >
           <section
+            ref={deskDialogRef}
             className="desk-modal"
             role="dialog"
             aria-modal="true"
             aria-labelledby="desk-setup-title"
+            tabIndex={-1}
             onMouseDown={(event) => event.stopPropagation()}
           >
             <header>
@@ -67,11 +150,17 @@ export function PlannerOverlays({
                 <span>Width</span>
                 <span className="input-unit">
                   <input
+                    data-dialog-initial-focus
                     type="number"
                     min="300"
                     value={deskDraft.width}
                     onChange={(event) =>
-                      updateDeskDraft("width", Number(event.target.value))
+                      updateDeskDraft(
+                        "width",
+                        event.target.value === ""
+                          ? ""
+                          : Number(event.target.value),
+                      )
                     }
                   />
                   <i>mm</i>
@@ -85,7 +174,12 @@ export function PlannerOverlays({
                     min="300"
                     value={deskDraft.depth}
                     onChange={(event) =>
-                      updateDeskDraft("depth", Number(event.target.value))
+                      updateDeskDraft(
+                        "depth",
+                        event.target.value === ""
+                          ? ""
+                          : Number(event.target.value),
+                      )
                     }
                   />
                   <i>mm</i>
@@ -111,10 +205,12 @@ export function PlannerOverlays({
           onMouseDown={closePrintPlan}
         >
           <aside
+            ref={printDialogRef}
             className="print-drawer"
             role="dialog"
             aria-modal="true"
             aria-labelledby="print-plan-title"
+            tabIndex={-1}
             onMouseDown={(event) => event.stopPropagation()}
           >
             <header>
@@ -204,10 +300,12 @@ export function PlannerOverlays({
           onMouseDown={closeTrace}
         >
           <aside
+            ref={traceDialogRef}
             className="print-drawer trace-drawer"
             role="dialog"
             aria-modal="true"
             aria-labelledby="trace-title"
+            tabIndex={-1}
             onMouseDown={(event) => event.stopPropagation()}
           >
             <header>

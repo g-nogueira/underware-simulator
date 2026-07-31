@@ -47,7 +47,10 @@ export function usePlannerController(partRegistry: PartRegistry) {
   const [activeTool, setActiveTool] = useState<ToolId>("select");
   const [planName, setPlanName] = useState("Gustavo’s desk");
   const [desk, setDesk] = useState({ width: 1600, depth: 800 });
-  const [deskDraft, setDeskDraft] = useState({ width: 1600, depth: 800 });
+  const [deskDraft, setDeskDraft] = useState<{
+    width: number | "";
+    depth: number | "";
+  }>({ width: 1600, depth: 800 });
   const [items, setItems] = useState<PlannerItem[]>(INITIAL_ITEMS);
   const [routes, setRoutes] = useState<CableRoute[]>(INITIAL_ROUTES);
   const [selectedId, setSelectedId] = useState("channel-middle");
@@ -449,36 +452,40 @@ export function usePlannerController(partRegistry: PartRegistry) {
   }
 
   function applyDeskDimensions() {
+    const { width, depth } = deskDraft;
     if (
-      !Number.isFinite(deskDraft.width) ||
-      !Number.isFinite(deskDraft.depth) ||
-      deskDraft.width < 300 ||
-      deskDraft.depth < 300
+      typeof width !== "number" ||
+      typeof depth !== "number" ||
+      !Number.isFinite(width) ||
+      !Number.isFinite(depth) ||
+      width < 300 ||
+      depth < 300
     ) {
       showToast("Use desk dimensions of at least 300 × 300 mm");
       return;
     }
+    const nextDesk = { width, depth };
     checkpointHistory();
-    setDesk(deskDraft);
+    setDesk(nextDesk);
     setItems((current) =>
       current.map((item) => ({
         ...item,
-        x: clamp(item.x, 0, Math.max(0, deskDraft.width - item.width)),
-        y: clamp(item.y, 0, Math.max(0, deskDraft.depth - item.height)),
+        x: clamp(item.x, 0, Math.max(0, width - item.width)),
+        y: clamp(item.y, 0, Math.max(0, depth - item.height)),
       })),
     );
     setRoutes((current) =>
       current.map((route) => ({
         ...route,
         points: route.points.map(([x, y]) => [
-          clamp(x, 0, deskDraft.width),
-          clamp(y, 0, deskDraft.depth),
+          clamp(x, 0, width),
+          clamp(y, 0, depth),
         ]),
       })),
     );
     setDeskOpen(false);
     showToast("Desk dimensions updated");
-    emitLog("desk.resized", deskDraft);
+    emitLog("desk.resized", nextDesk);
   }
 
   function removeRoute(routeId: string) {
@@ -591,6 +598,7 @@ export function usePlannerController(partRegistry: PartRegistry) {
         target?.tagName === "TEXTAREA" ||
         target?.isContentEditable;
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "z") {
+        if (editing) return;
         event.preventDefault();
         if (event.shiftKey) {
           redoPlan();
@@ -651,7 +659,10 @@ export function usePlannerController(partRegistry: PartRegistry) {
     setDeskOpen(false);
   }
 
-  function updateDeskDraft(dimension: "width" | "depth", value: number) {
+  function updateDeskDraft(
+    dimension: "width" | "depth",
+    value: number | "",
+  ) {
     setDeskDraft((current) => ({ ...current, [dimension]: value }));
   }
 

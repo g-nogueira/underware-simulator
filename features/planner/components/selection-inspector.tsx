@@ -4,14 +4,23 @@ import { ROUTE_COLORS } from "../model/catalog";
 
 import {
   usePartRegistry,
-  type PlannerFacade,
+  usePlanner,
 } from "../application/planner-provider";
 
-export function SelectionInspector({
-  planner,
-}: {
-  planner: PlannerFacade;
-}) {
+function parseMillimetres(
+  value: string,
+  fallback: number,
+  min = -Infinity,
+  max = Infinity,
+) {
+  if (value.trim() === "") return fallback;
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.min(Math.max(parsed, min), max);
+}
+
+export function SelectionInspector() {
+  const planner = usePlanner();
   const partRegistry = usePartRegistry();
   const {
     routes,
@@ -125,7 +134,12 @@ export function SelectionInspector({
                       value={selectedRoute.diameter}
                       onChange={(event) =>
                         updateRoute(selectedRoute.id, {
-                          diameter: Number(event.target.value),
+                          diameter: parseMillimetres(
+                            event.target.value,
+                            selectedRoute.diameter,
+                            1,
+                            30,
+                          ),
                         })
                       }
                     />
@@ -228,7 +242,12 @@ export function SelectionInspector({
                       value={selected.x}
                       step={systemSpec.grid}
                       onChange={(event) =>
-                        updateSelected({ x: Number(event.target.value) })
+                        updateSelected({
+                          x: parseMillimetres(
+                            event.target.value,
+                            selected.x,
+                          ),
+                        })
                       }
                     />
                     <i>mm</i>
@@ -242,7 +261,12 @@ export function SelectionInspector({
                       value={selected.y}
                       step={systemSpec.grid}
                       onChange={(event) =>
-                        updateSelected({ y: Number(event.target.value) })
+                        updateSelected({
+                          y: parseMillimetres(
+                            event.target.value,
+                            selected.y,
+                          ),
+                        })
                       }
                     />
                     <i>mm</i>
@@ -369,9 +393,24 @@ export function SelectionInspector({
               <div
                 key={route.id}
                 className={selectedRouteId === route.id ? "active" : ""}
-                onClick={() => selectRoute(route.id)}
+                style={{ cursor: "default" }}
               >
-                <i style={{ background: route.color }} aria-hidden="true" />
+                <button
+                  type="button"
+                  className="route-select"
+                  style={{
+                    width: 7,
+                    height: 7,
+                    padding: 0,
+                    borderRadius: "50%",
+                    background: route.color,
+                    color: route.color,
+                    boxShadow: "0 0 8px currentColor",
+                  }}
+                  onClick={() => selectRoute(route.id)}
+                  aria-label={"Select " + route.name}
+                  aria-pressed={selectedRouteId === route.id}
+                />
                 <label>
                   <span className="sr-only">Route name</span>
                   <input
@@ -392,7 +431,12 @@ export function SelectionInspector({
                     value={route.diameter}
                     onChange={(event) =>
                       updateRoute(route.id, {
-                        diameter: Number(event.target.value),
+                        diameter: parseMillimetres(
+                          event.target.value,
+                          route.diameter,
+                          1,
+                          30,
+                        ),
                       })
                     }
                   />

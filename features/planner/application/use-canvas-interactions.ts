@@ -50,6 +50,15 @@ function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max);
 }
 
+function toLocalPoint(svg: SVGSVGElement, clientX: number, clientY: number) {
+  const screenCtm = svg.getScreenCTM();
+  if (!screenCtm) return null;
+  const point = svg.createSVGPoint();
+  point.x = clientX;
+  point.y = clientY;
+  return point.matrixTransform(screenCtm.inverse());
+}
+
 /**
  * Owns the SVG pointer state machine. Components receive semantic handlers
  * instead of depending on mutable interaction refs or geometry helpers.
@@ -96,14 +105,12 @@ export function useCanvasInteractions({
   ) {
     if (activeTool !== "select") return;
     event.stopPropagation();
-    checkpointHistory();
-    event.currentTarget.setPointerCapture(event.pointerId);
     const svg = event.currentTarget.ownerSVGElement;
     if (!svg) return;
-    const point = svg.createSVGPoint();
-    point.x = event.clientX;
-    point.y = event.clientY;
-    const local = point.matrixTransform(svg.getScreenCTM()?.inverse());
+    const local = toLocalPoint(svg, event.clientX, event.clientY);
+    if (!local) return;
+    checkpointHistory();
+    event.currentTarget.setPointerCapture(event.pointerId);
     interactionRef.current = {
       type: "move-item",
       id: item.id,
@@ -137,14 +144,12 @@ export function useCanvasInteractions({
   ) {
     if (activeTool !== "select") return;
     event.stopPropagation();
-    checkpointHistory();
-    event.currentTarget.setPointerCapture(event.pointerId);
     const svg = event.currentTarget.ownerSVGElement;
     if (!svg) return;
-    const point = svg.createSVGPoint();
-    point.x = event.clientX;
-    point.y = event.clientY;
-    const local = point.matrixTransform(svg.getScreenCTM()?.inverse());
+    const local = toLocalPoint(svg, event.clientX, event.clientY);
+    if (!local) return;
+    checkpointHistory();
+    event.currentTarget.setPointerCapture(event.pointerId);
     interactionRef.current = {
       type: "move-route",
       id: route.id,
@@ -177,10 +182,8 @@ export function useCanvasInteractions({
     const active = interactionRef.current;
     if (!active) return;
     const svg = event.currentTarget;
-    const point = svg.createSVGPoint();
-    point.x = event.clientX;
-    point.y = event.clientY;
-    const local = point.matrixTransform(svg.getScreenCTM()?.inverse());
+    const local = toLocalPoint(svg, event.clientX, event.clientY);
+    if (!local) return;
 
     if (active.type === "move-item") {
       const moving = items.find((item) => item.id === active.id);
