@@ -251,6 +251,21 @@ test("splits openGrid coverage into exact printable baseplate sizes", () => {
   ]);
 });
 
+test("normalizes imported openGrid tile limits", () => {
+  const numericStrings = calculateGridTilePlan(224, 224, 28, "4", "8");
+  assert.deepEqual(
+    {
+      columns: numericStrings.columns,
+      rows: numericStrings.rows,
+      tileCount: numericStrings.tileCount,
+    },
+    { columns: 2, rows: 1, tileCount: 2 },
+  );
+
+  const malformed = calculateGridTilePlan(56, 56, 28, "invalid", Infinity);
+  assert.equal(malformed.tileCount, 4);
+});
+
 test("counts generated openGrid baseplates as individual print parts", () => {
   const result = calculatePrintPlan(
     [
@@ -278,7 +293,12 @@ test("counts generated openGrid baseplates as individual print parts", () => {
 
   assert.equal(result.gridTilesCount, 6);
   assert.equal(result.partsCount, 7);
-  assert.deepEqual(result.groups.at(-1), { label: "Cable loop", count: 1 });
+  assert.deepEqual(result.groups.at(-1), {
+    label: "Cable loop",
+    count: 1,
+    catalogId: "cable-loop",
+  });
+  assert.equal(result.groups[0].catalogId, "opengrid-baseplate");
 });
 
 test("reorders items and routes in one shared layer stack", () => {
@@ -315,5 +335,24 @@ test("rejects malformed imported plans", () => {
       routes: [],
     }).ok,
     true,
+  );
+  assert.equal(
+    validatePlanFile({
+      version: 1,
+      system: "openGrid",
+      desk: { width: 1600, depth: 800 },
+      items: [
+        {
+          id: "invalid-grid",
+          kind: "grid",
+          x: 0,
+          y: 0,
+          width: 0,
+          height: 224,
+        },
+      ],
+      routes: [],
+    }).ok,
+    false,
   );
 });

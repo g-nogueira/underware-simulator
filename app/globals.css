@@ -1984,7 +1984,7 @@ button.primary:hover {
     gap: 16px;
   }
 
-  .print-summary > span:nth-child(2) {
+  .print-summary > .print-summary-estimate {
     display: none;
   }
 

@@ -483,7 +483,11 @@ export default function Home() {
     ? Math.round(calculateRouteLength(selectedRoute.points))
     : 0;
   const selectedGridPlan =
-    selected?.kind === "grid"
+    selected?.kind === "grid" &&
+    Number.isFinite(selected.width) &&
+    Number.isFinite(selected.height) &&
+    selected.width > 0 &&
+    selected.height > 0
       ? (calculateGridTilePlan(
           selected.width,
           selected.height,
@@ -507,13 +511,21 @@ export default function Home() {
       }>,
     [items, routes],
   );
+  const itemById = useMemo(
+    () => new Map(items.map((item) => [item.id, item])),
+    [items],
+  );
+  const routeById = useMemo(
+    () => new Map(routes.map((route) => [route.id, route])),
+    [routes],
+  );
   const printPlan = useMemo(
     () =>
       calculatePrintPlan(items, system) as {
         partsCount: number;
         printMinutes: number;
         filamentGrams: number;
-        groups: Array<{ label: string; count: number }>;
+        groups: Array<{ label: string; count: number; catalogId?: string }>;
         overCapacityIds: string[];
         gridTilesCount: number;
       },
@@ -686,11 +698,9 @@ export default function Home() {
     }
 
     if (tool === "parts") {
-      setCatalogOpen((current) => {
-        const next = !current;
-        setActiveTool(next ? "parts" : "select");
-        return next;
-      });
+      const next = !catalogOpen;
+      setCatalogOpen(next);
+      setActiveTool(next ? "parts" : "select");
       return;
     }
 
@@ -1391,7 +1401,11 @@ export default function Home() {
 
   function renderItemLayer(item: PlannerItem) {
     const gridPlan =
-      item.kind === "grid"
+      item.kind === "grid" &&
+      Number.isFinite(item.width) &&
+      Number.isFinite(item.height) &&
+      item.width > 0 &&
+      item.height > 0
         ? (calculateGridTilePlan(
             item.width,
             item.height,
@@ -1860,10 +1874,10 @@ export default function Home() {
 
               {layerStack.map((entry) => {
                 if (entry.type === "route") {
-                  const route = routes.find((candidate) => candidate.id === entry.id);
+                  const route = routeById.get(entry.id);
                   return route ? renderRouteLayer(route) : null;
                 }
-                const item = items.find((candidate) => candidate.id === entry.id);
+                const item = itemById.get(entry.id);
                 return item ? renderItemLayer(item) : null;
               })}
 
@@ -1965,7 +1979,7 @@ export default function Home() {
               </strong>
             </span>
           )}
-          <span>
+          <span className="print-summary-estimate">
             <small>Estimate</small>
             <strong>
               {Math.floor(printPlan.printMinutes / 60)}h{" "}
@@ -2186,7 +2200,9 @@ export default function Home() {
                       min="1"
                       value={selected.width}
                       onChange={(event) =>
-                        updateSelected({ width: Number(event.target.value) })
+                        updateSelected({
+                          width: Math.max(1, Number(event.target.value) || 1),
+                        })
                       }
                     />
                     <i>mm</i>
@@ -2200,7 +2216,9 @@ export default function Home() {
                       min="1"
                       value={selected.height}
                       onChange={(event) =>
-                        updateSelected({ height: Number(event.target.value) })
+                        updateSelected({
+                          height: Math.max(1, Number(event.target.value) || 1),
+                        })
                       }
                     />
                     <i>mm</i>
@@ -2666,7 +2684,7 @@ export default function Home() {
                   <span>
                     <strong>{group.label}</strong>
                     <small>
-                      {group.label.startsWith("openGrid baseplate")
+                      {group.catalogId === "opengrid-baseplate"
                         ? "openGrid compatible"
                         : `${systemSpec.label} compatible`}
                     </small>

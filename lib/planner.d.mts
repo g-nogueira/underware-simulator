@@ -113,7 +113,7 @@ export function calculatePrintPlan(
   partsCount: number;
   printMinutes: number;
   filamentGrams: number;
-  groups: Array<{ label: string; count: number }>;
+  groups: Array<{ label: string; count: number; catalogId?: string }>;
   overCapacityIds: string[];
   gridTilesCount: number;
 };
