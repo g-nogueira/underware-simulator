@@ -11,6 +11,7 @@ import {
 import {
   SYSTEM_SPECS,
   buildLayerStack,
+  calculateCableRouteGeometries,
   calculateGridTilePlan,
   calculateRouteLength,
   calculatePrintPlan,
@@ -463,6 +464,23 @@ export default function Home() {
   const selected = items.find((item) => item.id === selectedId) ?? null;
   const selectedRoute =
     routes.find((route) => route.id === selectedRouteId) ?? null;
+  const routeGeometryById = useMemo(
+    () =>
+      new Map(
+        (
+          calculateCableRouteGeometries(routes) as Array<{
+            id: string;
+            path: string;
+            sharedSegmentCount: number;
+            maxBundleSize: number;
+          }>
+        ).map((geometry) => [geometry.id, geometry]),
+      ),
+    [routes],
+  );
+  const selectedRouteGeometry = selectedRoute
+    ? routeGeometryById.get(selectedRoute.id)
+    : null;
   const selectedRoutePointIndex =
     selectedRoutePoint?.routeId === selectedRouteId
       ? selectedRoutePoint.pointIndex
@@ -942,7 +960,7 @@ export default function Home() {
   }
 
   function handleRoutePointerDown(
-    event: ReactPointerEvent<SVGPolylineElement>,
+    event: ReactPointerEvent<SVGPathElement>,
     route: CableRoute,
   ) {
     if (activeTool !== "select") return;
@@ -1374,6 +1392,8 @@ export default function Home() {
 
   function renderRouteLayer(route: CableRoute) {
     const routePoints = route.points.map((point) => point.join(",")).join(" ");
+    const routeGeometry = routeGeometryById.get(route.id);
+    const routePath = routeGeometry?.path ?? "";
     return (
       <g
         key={`route:${route.id}`}
@@ -1381,19 +1401,26 @@ export default function Home() {
           selectedRouteId === route.id ? "selected" : ""
         }`}
       >
-        <polyline
-          points={routePoints}
+        <path
+          d={routePath}
           className="route-hit"
           onPointerDown={(event) => handleRoutePointerDown(event, route)}
         />
-        <polyline points={routePoints} className="route-halo" />
-        <polyline
-          points={routePoints}
+        <path
+          d={routePath}
+          className="route-halo"
+          strokeWidth={route.diameter + 10}
+        />
+        <path
+          d={routePath}
           stroke={route.color}
           strokeWidth={route.diameter + 3}
         />
         {selectedRouteId === route.id && (
-          <polyline points={routePoints} className="route-selection" />
+          <>
+            <path d={routePath} className="route-selection" />
+            <polyline points={routePoints} className="route-centerline" />
+          </>
         )}
       </g>
     );
@@ -2114,6 +2141,20 @@ export default function Home() {
                     />
                   ))}
                 </div>
+              </div>
+              <div className="route-bundle-status">
+                <span>Channel behaviour</span>
+                <strong>
+                  {selectedRouteGeometry &&
+                  selectedRouteGeometry.maxBundleSize > 1
+                    ? `${selectedRouteGeometry.maxBundleSize} cable lanes detected`
+                    : "Automatic cable lanes"}
+                </strong>
+                <small>
+                  Grid points remain the exact route centreline. Shared segments
+                  fan into parallel, diameter-aware lanes; layer order controls
+                  over/under crossings.
+                </small>
               </div>
             </section>
             <section className="inspector-section">

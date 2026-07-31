@@ -751,6 +751,7 @@ button.primary:hover {
   text-transform: uppercase;
 }
 
+.route path,
 .route polyline {
   fill: none;
   stroke-linecap: round;
@@ -771,11 +772,11 @@ button.primary:hover {
 
 .route-halo {
   stroke: rgba(2, 7, 11, 0.8);
-  stroke-width: 18;
   pointer-events: none;
 }
 
-.route > polyline:not(.route-hit) {
+.route > path:not(.route-hit),
+.route > polyline {
   pointer-events: none;
 }
 
@@ -783,6 +784,12 @@ button.primary:hover {
   stroke: var(--blue);
   stroke-width: 2;
   stroke-dasharray: 7 7;
+}
+
+.route-centerline {
+  stroke: rgba(255, 255, 255, 0.46);
+  stroke-width: 1.5;
+  stroke-dasharray: 4 7;
 }
 
 .route-point {
@@ -1300,6 +1307,37 @@ button.primary:hover {
   border-radius: 7px;
   background: #08131e;
   cursor: pointer;
+}
+
+.route-bundle-status {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-top: 14px;
+  padding: 11px;
+  border: 1px solid rgba(86, 215, 228, 0.28);
+  border-radius: 8px;
+  background: rgba(25, 91, 101, 0.12);
+}
+
+.route-bundle-status span {
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.route-bundle-status strong {
+  color: #b9f4f8;
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 11px;
+}
+
+.route-bundle-status small {
+  color: var(--muted);
+  font-size: 9px;
+  line-height: 1.5;
 }
 
 .color-swatches {

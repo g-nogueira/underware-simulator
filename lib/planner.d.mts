@@ -34,6 +34,32 @@ export function calculateRouteLength(
   points: Array<[number, number]>,
 ): number;
 
+export type CableRouteGeometryInput = {
+  id: string;
+  points: Array<[number, number]>;
+  diameter?: number;
+  layer?: number;
+};
+
+export type CableRouteGeometry = {
+  id: string;
+  path: string;
+  displayPoints: Array<[number, number]>;
+  segmentOffsets: number[];
+  sharedSegmentCount: number;
+  maxBundleSize: number;
+  routeIndex: number;
+};
+
+export function calculateCableRouteGeometries(
+  routes: CableRouteGeometryInput[],
+  options?: {
+    channelTolerance?: number;
+    laneGap?: number;
+    cornerRadius?: number;
+  },
+): CableRouteGeometry[];
+
 export function insertRouteBend(
   points: Array<[number, number]>,
 ): Array<[number, number]>;
@@ -93,7 +119,7 @@ export function calculateGridTilePlan(
   columns: number;
   rows: number;
   tileCount: number;
-  groups: Array<{ label: string; count: number }>;
+  groups: Array<{ label: string; count: number; catalogId?: string }>;
 };
 
 export function calculatePrintPlan(
@@ -113,7 +139,7 @@ export function calculatePrintPlan(
   partsCount: number;
   printMinutes: number;
   filamentGrams: number;
-  groups: Array<{ label: string; count: number; catalogId?: string }>;
+  groups: Array<{ label: string; count: number }>;
   overCapacityIds: string[];
   gridTilesCount: number;
 };
