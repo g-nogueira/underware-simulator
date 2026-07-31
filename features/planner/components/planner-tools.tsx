@@ -1,15 +1,17 @@
-import { PART_CATALOG, TOOLS } from "../model/catalog";
+import { TOOLS } from "../model/catalog";
 import { usePlanner } from "../application/planner-provider";
 
 export function PlannerTools() {
   const {
-    system,
+    partCatalog,
     activeTool,
     catalogOpen,
     closeCatalog,
     selectTool,
+    canAddCatalogItem,
     addCatalogItem,
   } = usePlanner();
+  const categories = [...new Set(partCatalog.map((part) => part.category))];
 
   return (
     <>
@@ -59,24 +61,21 @@ export function PlannerTools() {
             Schematic planning parts based on the official Underware and
             openGrid customizers.
           </p>
-          {(["Foundation", "Cable routing", "Mounts"] as const).map(
-            (category) => (
+          {categories.map((category) => (
               <section key={category}>
                 <h3>{category}</h3>
                 <div className="catalog-grid">
-                  {PART_CATALOG.filter(
+                  {partCatalog.filter(
                     (part) => part.category === category,
                   ).map((part) => (
                     <button
                       type="button"
                       key={part.id}
                       className={
-                        part.id === "opengrid-baseplate"
-                          ? "priority-part"
-                          : ""
+                        part.featured ? "priority-part" : ""
                       }
-                      onClick={() => addCatalogItem(part)}
-                      disabled={part.openGridOnly && system !== "openGrid"}
+                      onClick={() => addCatalogItem(part.id)}
+                      disabled={!canAddCatalogItem(part.id)}
                     >
                       <span aria-hidden="true">{part.icon}</span>
                       <strong>{part.name}</strong>
@@ -85,8 +84,7 @@ export function PlannerTools() {
                   ))}
                 </div>
               </section>
-            ),
-          )}
+            ))}
         </aside>
       )}
     </>

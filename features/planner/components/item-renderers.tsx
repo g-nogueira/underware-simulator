@@ -1,4 +1,3 @@
-import type { ComponentType } from "react";
 import {
   SYSTEM_SPECS,
   calculateGridTilePlan,
@@ -6,11 +5,16 @@ import {
   getPowerBrickOutletLayout,
 } from "@/lib/planner.mjs";
 
-import type { ItemKind, PlannerItem } from "../model/types";
+import { usePartRegistry } from "../application/planner-provider";
+import type { PlannerItem } from "../model/types";
+import type { PartRendererProps } from "../parts/contracts";
 
-type ItemRendererProps = { item: PlannerItem };
+type ChannelTopology = "straight" | "l" | "t" | "x" | "s";
 
-function ItemBody({ item, grid = false }: ItemRendererProps & { grid?: boolean }) {
+function ItemBody({
+  item,
+  grid = false,
+}: PartRendererProps & { grid?: boolean }) {
   return (
     <rect
       x={item.x}
@@ -24,7 +28,7 @@ function ItemBody({ item, grid = false }: ItemRendererProps & { grid?: boolean }
   );
 }
 
-function GridRenderer({ item }: ItemRendererProps) {
+export function GridRenderer({ item }: PartRendererProps) {
   const plan =
     Number.isFinite(item.width) &&
     Number.isFinite(item.height) &&
@@ -66,39 +70,43 @@ function GridRenderer({ item }: ItemRendererProps) {
   );
 }
 
-function ChannelRenderer({ item }: ItemRendererProps) {
-  const geometry = getChannelGeometry(item);
-  return (
-    <>
-      <rect
-        x={item.x}
-        y={item.y}
-        width={item.width}
-        height={item.height}
-        className="channel-hit-area"
-      />
-      <g transform={geometry.transform}>
-        {geometry.paths.map((path, index) => (
-          <g key={`${index}-${path}`}>
-            <path
-              d={path}
-              className="channel-shell-outline"
-              strokeWidth={geometry.branchWidth + 4}
-            />
-            <path
-              d={path}
-              className="channel-shell"
-              strokeWidth={geometry.branchWidth}
-            />
-            <path d={path} className="channel-core" />
-          </g>
-        ))}
-      </g>
-    </>
-  );
+export function createChannelRenderer(topology: ChannelTopology) {
+  function ChannelRenderer({ item }: PartRendererProps) {
+    const geometry = getChannelGeometry(item, topology);
+    return (
+      <>
+        <rect
+          x={item.x}
+          y={item.y}
+          width={item.width}
+          height={item.height}
+          className="channel-hit-area"
+        />
+        <g transform={geometry.transform}>
+          {geometry.paths.map((path, index) => (
+            <g key={`${index}-${path}`}>
+              <path
+                d={path}
+                className="channel-shell-outline"
+                strokeWidth={geometry.branchWidth + 4}
+              />
+              <path
+                d={path}
+                className="channel-shell"
+                strokeWidth={geometry.branchWidth}
+              />
+              <path d={path} className="channel-core" />
+            </g>
+          ))}
+        </g>
+      </>
+    );
+  }
+  ChannelRenderer.displayName = `${topology}ChannelRenderer`;
+  return ChannelRenderer;
 }
 
-function CableLoopRenderer({ item }: ItemRendererProps) {
+export function CableLoopRenderer({ item }: PartRendererProps) {
   return (
     <>
       <ItemBody item={item} />
@@ -120,7 +128,7 @@ function CableLoopRenderer({ item }: ItemRendererProps) {
   );
 }
 
-function PowerBrickRenderer({ item }: ItemRendererProps) {
+export function PowerBrickRenderer({ item }: PartRendererProps) {
   return (
     <>
       <ItemBody item={item} />
@@ -141,7 +149,7 @@ function PowerBrickRenderer({ item }: ItemRendererProps) {
   );
 }
 
-function HolderRenderer({ item }: ItemRendererProps) {
+export function HolderRenderer({ item }: PartRendererProps) {
   return (
     <>
       <ItemBody item={item} />
@@ -164,7 +172,7 @@ function HolderRenderer({ item }: ItemRendererProps) {
   );
 }
 
-function ObstacleRenderer({ item }: ItemRendererProps) {
+export function ObstacleRenderer({ item }: PartRendererProps) {
   return (
     <>
       <ItemBody item={item} />
@@ -180,17 +188,20 @@ function ObstacleRenderer({ item }: ItemRendererProps) {
   );
 }
 
-/** Exhaustive registry: adding a new item kind requires one renderer entry. */
-const ITEM_RENDERERS: Record<ItemKind, ComponentType<ItemRendererProps>> = {
+/** Compatibility fallback for v1 plan items without a catalogue ID. */
+const LEGACY_RENDERERS = {
+  part: HolderRenderer,
   grid: GridRenderer,
-  channel: ChannelRenderer,
+  channel: createChannelRenderer("straight"),
   "cable-loop": CableLoopRenderer,
   "power-brick": PowerBrickRenderer,
   holder: HolderRenderer,
   obstacle: ObstacleRenderer,
-};
+} as const;
 
-export function ItemVisual({ item }: ItemRendererProps) {
-  const Renderer = ITEM_RENDERERS[item.kind];
+export function ItemVisual({ item }: { item: PlannerItem }) {
+  const registry = usePartRegistry();
+  const Renderer =
+    registry.resolve(item)?.Renderer ?? LEGACY_RENDERERS[item.kind];
   return <Renderer item={item} />;
 }

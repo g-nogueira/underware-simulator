@@ -1,4 +1,7 @@
-import { usePlanner } from "../application/planner-provider";
+import {
+  usePartRegistry,
+  usePlanner,
+} from "../application/planner-provider";
 import type { CableRoute, PlannerItem, ResizeCorner } from "../model/types";
 import { ItemVisual } from "./item-renderers";
 
@@ -42,6 +45,7 @@ export function RouteLayer({ route }: { route: CableRoute }) {
 }
 
 export function ItemLayer({ item }: { item: PlannerItem }) {
+  const partRegistry = usePartRegistry();
   const {
     selectedId,
     handlePointerDown,
@@ -54,7 +58,11 @@ export function ItemLayer({ item }: { item: PlannerItem }) {
         selectedId === item.id ? "selected" : ""
       }`}
       onPointerDown={(event) => handlePointerDown(event, item)}
-      filter={item.kind === "grid" ? undefined : "url(#item-shadow)"}
+      filter={
+        partRegistry.resolve(item)?.appearance?.shadow === false
+          ? undefined
+          : "url(#item-shadow)"
+      }
       role="button"
       aria-label={`${item.name}, at ${item.x} by ${item.y} millimetres`}
       tabIndex={0}

@@ -3,6 +3,7 @@ export type SystemId = "openGrid" | "underware";
 export type ToolId = "select" | "grid" | "parts" | "route" | "obstacle";
 
 export type ItemKind =
+  | "part"
   | "grid"
   | "channel"
   | "cable-loop"
@@ -10,16 +11,11 @@ export type ItemKind =
   | "holder"
   | "obstacle";
 
-export type CatalogItemId =
-  | "opengrid-baseplate"
-  | "straight-channel"
-  | "l-channel"
-  | "t-channel"
-  | "x-channel"
-  | "s-channel"
-  | "cable-loop"
-  | "device-holder"
-  | "power-brick-mount";
+/**
+ * Catalogue IDs are deliberately open. Part modules own their identifiers, so
+ * registering a new shape does not require reopening a central union.
+ */
+export type CatalogItemId = string;
 
 export type LayerMovement = "back" | "backward" | "forward" | "front";
 
@@ -96,13 +92,11 @@ export type CatalogItem = {
   kind: Exclude<ItemKind, "obstacle">;
   name: string;
   icon: string;
-  category: "Foundation" | "Cable routing" | "Mounts";
+  category: string;
   description: string;
   widthCells: number;
   heightCells: number;
-  openGridOnly?: boolean;
-  cables?: number;
-  outlets?: number;
+  featured?: boolean;
 };
 
 export type LayerEntry = {

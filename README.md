@@ -8,15 +8,14 @@ questions that are expensive to answer through trial and error:
 
 - Will the proposed route fit beneath the desk and around its frame?
 - Do the channels have enough capacity for the selected cables?
-- Which channels, corners, holders, grids, and power components need printing?
+- Which channels, corners, holders, and power components need to be printed?
 
 ## Features
 
 - Editable desk dimensions and obstacles
 - openGrid 28 mm and Underware 25 mm snapping
-- Draggable channels, holders, power components, and printable grid coverage
-- Cable routes with realistic shared lanes, diameter, color, and capacity checks
-- Shared layer ordering for physical parts and cable routes
+- Draggable channels, holders, and power components
+- Cable routes with diameter and capacity validation
 - Grouped print list with heuristic time and filament estimates
 - Browser autosave and JSON import/export
 - Undo/redo and keyboard shortcuts
@@ -25,6 +24,41 @@ questions that are expensive to answer through trial and error:
 The displayed components are schematic planning representations. Generate the
 final printable parts with the official model tools and verify all dimensions
 before printing.
+
+## Architecture
+
+The planner is a vertical feature under `features/planner`:
+
+- `model/` owns stable plan types and the initial sample plan.
+- `parts/` owns the extension contract, built-in part modules, and the registry
+  that composes them.
+- `application/` owns use-case orchestration. Persistence, history, tracing, and
+  canvas pointer state have focused hooks; `PlannerProvider` only wires the
+  controller and contexts.
+- `components/` owns editor surfaces and generic extension hosts. The route
+  entry point delegates immediately to this feature.
+- `lib/planner.mjs` remains the framework-independent geometry, validation,
+  and print-plan engine covered by Node tests.
+
+`PlannerPage` is the composition root. It injects a `PartRegistry` into the
+planner rather than letting application code import built-in parts. Each part
+definition composes catalogue metadata, defaults, placement/resize rules,
+rendering, optional inspector sections, availability, and print behaviour.
+Adding a shape with existing behaviours is therefore one definition; a shape
+with new presentation supplies its own renderer or inspector component without
+changing the editor surfaces. The core print engine receives the registry's
+plain print definitions instead of maintaining another catalogue switch.
+
+The facade exposes read-only state and named operations such as
+`addCatalogItem`, `updateSelected`, `moveSelectionLayer`, and
+`openPrintPlan`. React setters, undo stacks, trace storage, and mutable pointer
+refs remain behind the application boundary.
+
+This is deliberately lightweight inversion of control, not a plugin framework
+or dependency-injection container. A genuinely new domain concept (for example,
+a routed electrical circuit with new saved data) should still change the plan
+schema and validation explicitly. Open/closed is used to make new printable
+parts cheap, not to hide meaningful domain changes behind untyped callbacks.
 
 ## Development
 
@@ -47,40 +81,14 @@ npm test
 ```
 
 `npm test` creates and validates the production artifact before running the
-geometry, validation, bill-of-materials, rendered-output, and architecture
-contract tests.
+geometry, validation, bill-of-materials, and rendered-output tests.
 
 Pull requests run the same lint, build, artifact, and test checks through
 GitHub Actions.
 
-## Architecture
-
-The planner is a vertical feature under `features/planner`:
-
-- `model/` owns stable types, the initial sample plan, and the extensible part
-  catalogue.
-- `application/` owns editor orchestration. `PlannerProvider` is the UI-facing
-  facade; history, tracing, and canvas pointer state each live in focused hooks.
-- `components/` owns composition and rendering. The page entrypoint delegates
-  immediately to this feature instead of containing editor logic.
-- `lib/planner.mjs` remains the framework-independent geometry, validation, and
-  print-plan engine covered by Node tests.
-- `worker/` contains the Cloudflare-compatible server entry point.
-- `.openai/hosting.json` contains the Sites deployment identity.
-
-To add another part that uses an existing item kind, add one entry to
-`features/planner/model/catalog.ts`; creation, placement, catalogue UI, and
-print-plan metadata continue through the existing workflow. A genuinely new
-item kind also adds one renderer to the exhaustive registry in
-`features/planner/components/item-renderers.tsx`.
-
-The facade exposes read-only planner state and named operations such as
-`addCatalogItem`, `updateSelected`, `moveSelectionLayer`, and `openPrintPlan`.
-React setters, undo stacks, trace storage, and mutable pointer refs stay behind
-the application boundary.
-
-State remains local-first: browser storage provides autosave, while JSON
-export/import provides portable plans without a database or hosted backend.
+State is deliberately local-first: browser storage provides autosave, while
+JSON export/import provides portable plans without requiring a database or
+hosted backend.
 
 ## Attribution
 

@@ -1,12 +1,16 @@
 "use client";
 
-import type { PlannerFacade } from "../application/planner-provider";
+import {
+  usePartRegistry,
+  type PlannerFacade,
+} from "../application/planner-provider";
 
 export function PlannerOverlays({
   planner,
 }: {
   planner: PlannerFacade;
 }) {
+  const partRegistry = usePartRegistry();
   const {
     deskDraft,
     printOpen,
@@ -170,7 +174,9 @@ export function PlannerOverlays({
                   <span>
                     <strong>{group.label}</strong>
                     <small>
-                      {group.catalogId === "opengrid-baseplate"
+                      {group.catalogId &&
+                      partRegistry.get(group.catalogId)?.availability?.system ===
+                        "openGrid"
                         ? "openGrid compatible"
                         : `${systemSpec.label} compatible`}
                     </small>

@@ -7,7 +7,6 @@ import {
   type SetStateAction,
 } from "react";
 import {
-  SYSTEM_SPECS,
   moveRoutePoint,
   resizeItemFromCorner,
   snapToGrid,
@@ -41,6 +40,10 @@ type CanvasInteractionOptions = {
     details?: Record<string, unknown>,
     level?: "info" | "warn",
   ) => void;
+  getItemGridSize: (item: PlannerItem) => number;
+  getItemMinimumSize: (
+    item: PlannerItem,
+  ) => { width: number; height: number };
 };
 
 function clamp(value: number, min: number, max: number) {
@@ -64,6 +67,8 @@ export function useCanvasInteractions({
   setSelectedRoutePoint,
   checkpointHistory,
   emitLog,
+  getItemGridSize,
+  getItemMinimumSize,
 }: CanvasInteractionOptions) {
   const interactionRef = useRef<CanvasInteraction | null>(null);
 
@@ -180,8 +185,7 @@ export function useCanvasInteractions({
     if (active.type === "move-item") {
       const moving = items.find((item) => item.id === active.id);
       if (!moving) return;
-      const movingGrid =
-        moving.kind === "grid" ? SYSTEM_SPECS.openGrid.grid : gridSize;
+      const movingGrid = getItemGridSize(moving);
       const nextX = snapToGrid(
         clamp(local.x - active.dx, 0, desk.width - moving.width),
         movingGrid,
@@ -200,23 +204,15 @@ export function useCanvasInteractions({
 
     if (active.type === "resize-item") {
       const start = active.startItem;
-      const resizeGrid =
-        start.kind === "grid" ? SYSTEM_SPECS.openGrid.grid : gridSize;
-      const minWidth =
-        start.kind === "power-brick" || start.kind === "holder"
-          ? resizeGrid * 3
-          : resizeGrid;
-      const minHeight =
-        start.kind === "power-brick" || start.kind === "holder"
-          ? resizeGrid * 2
-          : resizeGrid;
+      const resizeGrid = getItemGridSize(start);
+      const minimumSize = getItemMinimumSize(start);
       const resized = resizeItemFromCorner(
         start,
         active.corner,
         local,
         desk,
         resizeGrid,
-        { width: minWidth, height: minHeight },
+        minimumSize,
       );
 
       setItems((current) =>

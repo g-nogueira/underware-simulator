@@ -12,7 +12,10 @@ async function source(relativePath) {
 
 test("keeps the route entrypoint free of planner responsibilities", async () => {
   const page = await source("app/page.tsx");
-  assert.equal(page.trim(), 'export { default } from "@/features/planner/planner-page";');
+  assert.equal(
+    page.trim(),
+    'export { default } from "@/features/planner/planner-page";',
+  );
   assert.doesNotMatch(page, /useState|useEffect|SYSTEM_SPECS|calculate[A-Z]/);
 });
 
@@ -31,11 +34,11 @@ test("composes the editor from focused feature surfaces", async () => {
 });
 
 test("keeps mutable implementation details behind the planner facade", async () => {
-  const provider = await source(
-    "features/planner/application/planner-provider.tsx",
+  const controller = await source(
+    "features/planner/application/use-planner-controller.ts",
   );
-  const facade = provider.match(
-    /\n  return \{\n    system,[\s\S]*?\n  \};\n\}\n\nexport type PlannerFacade/,
+  const facade = controller.match(
+    /\n  return \{\n    partCatalog:[\s\S]*?\n  \};\n\}\n\nexport type PlannerFacade/,
   )?.[0];
 
   assert.ok(facade, "planner facade return block should remain explicit");
@@ -44,38 +47,68 @@ test("keeps mutable implementation details behind the planner facade", async () 
     facade,
     /interactionRef|pastRef|futureRef|checkpointHistory|emitLog|makeId/,
   );
-  assert.doesNotMatch(provider, /className=|<svg/);
+  assert.doesNotMatch(controller, /className=|<svg/);
 });
 
-test("registers one renderer for every supported item kind", async () => {
+test("injects part composition through an application-owned interface", async () => {
+  const page = await source("features/planner/planner-page.tsx");
+  const provider = await source(
+    "features/planner/application/planner-provider.tsx",
+  );
+  const controller = await source(
+    "features/planner/application/use-planner-controller.ts",
+  );
+
+  assert.match(page, /partRegistry=\{DEFAULT_PART_REGISTRY\}/);
+  assert.match(provider, /partRegistry: PartRegistry/);
+  assert.match(controller, /usePlannerController\(partRegistry: PartRegistry\)/);
+  assert.doesNotMatch(controller, /built-in-parts|BUILT_IN_PARTS|PART_CATALOG/);
+});
+
+test("composes each part from metadata, behaviour, and presentation", async () => {
+  const contracts = await source("features/planner/parts/contracts.ts");
+  const builtIns = await source("features/planner/parts/built-in-parts.tsx");
+  const registry = await source("features/planner/parts/part-registry.ts");
+
+  for (const contract of [
+    "catalog: CatalogItem",
+    "Renderer: ComponentType",
+    "InspectorSections?",
+    "placement?",
+    "print?",
+  ]) {
+    assert.match(contracts, new RegExp(contract.replace("?", "\\?")));
+  }
+  assert.match(builtIns, /createPartRegistry\(BUILT_IN_PARTS\)/);
+  assert.match(registry, /Duplicate part definition/);
+  assert.match(registry, /minimumSizeFor/);
+});
+
+test("keeps catalogue identifiers and categories open for extension", async () => {
   const types = await source("features/planner/model/types.ts");
-  const renderers = await source(
-    "features/planner/components/item-renderers.tsx",
+  assert.match(types, /export type CatalogItemId = string;/);
+  assert.match(types, /category: string;/);
+  assert.doesNotMatch(
+    types,
+    /CatalogItemId\s*=\s*\n?\s*\|\s*"opengrid-baseplate"/,
   );
-  const kindBlock = types.match(/export type ItemKind =([\s\S]*?);/)?.[1];
-  const registryBlock = renderers.match(
-    /const ITEM_RENDERERS:[\s\S]*?= \{([\s\S]*?)\n\};/,
-  )?.[1];
-
-  assert.ok(kindBlock);
-  assert.ok(registryBlock);
-  const kinds = [...kindBlock.matchAll(/"([^"]+)"/g)].map((match) => match[1]);
-  const registered = [...registryBlock.matchAll(/^\s*(?:"([^"]+)"|([\w-]+)):/gm)]
-    .map((match) => match[1] ?? match[2]);
-  assert.deepEqual(registered.sort(), kinds.sort());
 });
 
-test("keeps catalogue identifiers unique", async () => {
-  const catalog = await source("features/planner/model/catalog.ts");
-  const partBlock = catalog.match(
-    /export const PART_CATALOG:[\s\S]*?= \[([\s\S]*?)\n\];/,
-  )?.[1];
-  assert.ok(partBlock);
-  const ids = [...partBlock.matchAll(/\bid: "([^"]+)"/g)].map(
-    (match) => match[1],
-  );
-  assert.ok(ids.length > 0);
-  assert.equal(new Set(ids).size, ids.length);
+test("keeps concrete part IDs out of planner core", async () => {
+  const featureRoot = path.join(root, "features/planner");
+  const entries = await readdir(featureRoot, {
+    recursive: true,
+    withFileTypes: true,
+  });
+  const concreteIds =
+    /opengrid-baseplate|straight-channel|l-channel|t-channel|x-channel|s-channel|device-holder|power-brick-mount/;
+
+  for (const entry of entries) {
+    if (!entry.isFile() || !/\.(?:ts|tsx)$/.test(entry.name)) continue;
+    const filePath = path.join(entry.parentPath, entry.name);
+    if (filePath.endsWith(path.join("parts", "built-in-parts.tsx"))) continue;
+    assert.doesNotMatch(await readFile(filePath, "utf8"), concreteIds, filePath);
+  }
 });
 
 test("prevents another planner source monolith", async () => {
@@ -88,6 +121,6 @@ test("prevents another planner source monolith", async () => {
     if (!entry.isFile() || !/\.(?:ts|tsx)$/.test(entry.name)) continue;
     const filePath = path.join(entry.parentPath, entry.name);
     const lines = (await readFile(filePath, "utf8")).split("\n").length;
-    assert.ok(lines <= 1000, filePath + " has " + lines + " lines");
+    assert.ok(lines <= 850, filePath + " has " + lines + " lines");
   }
 });

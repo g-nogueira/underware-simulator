@@ -104,6 +104,23 @@ test("rotates junction footprints inside their existing item bounds", () => {
   assert.equal(geometry.transform, "rotate(90 96 116)");
 });
 
+test("accepts channel topology from a composed part definition", () => {
+  const geometry = getChannelGeometry(
+    {
+      x: 0,
+      y: 0,
+      width: 112,
+      height: 112,
+      rotation: 0,
+      catalogId: "third-party-corner",
+    },
+    "l",
+  );
+
+  assert.equal(geometry.paths.length, 1);
+  assert.match(geometry.paths[0], / V .* H /);
+});
+
 test("calculates route length and inserts a bend in its longest segment", () => {
   const points = [
     [0, 0],
@@ -399,6 +416,40 @@ test("estimates openGrid material from complete generated cells", () => {
   assert.equal(result.gridTilesCount, 1);
   assert.ok(result.printMinutes > 0);
   assert.ok(result.filamentGrams > 0);
+});
+
+test("uses injected part print behaviour without changing the engine", () => {
+  const result = calculatePrintPlan(
+    [
+      {
+        id: "custom",
+        kind: "part",
+        name: "User-facing name",
+        catalogId: "third-party-channel",
+        width: 140,
+        height: 56,
+        cables: 7,
+      },
+    ],
+    "openGrid",
+    [
+      {
+        id: "third-party-channel",
+        name: "Third-party channel",
+        strategy: "linear",
+        capacity: "cable",
+      },
+    ],
+  );
+
+  assert.deepEqual(result.groups, [
+    {
+      label: "Third-party channel · 140 mm",
+      count: 1,
+      catalogId: "third-party-channel",
+    },
+  ]);
+  assert.deepEqual(result.overCapacityIds, ["custom"]);
 });
 
 test("reorders items and routes in one shared layer stack", () => {

@@ -37,7 +37,7 @@ export function getChannelGeometry(item: {
   height: number;
   rotation?: 0 | 90 | 180 | 270;
   catalogId?: string;
-}): {
+}, topology?: "straight" | "l" | "t" | "x" | "s"): {
   paths: string[];
   branchWidth: number;
   transform?: string;
@@ -153,6 +153,12 @@ export function calculatePrintPlan(
     maxTileCellsY?: number;
   }>,
   systemId: SystemId,
+  partDefinitions?: ReadonlyArray<{
+    id: string;
+    name: string;
+    strategy: "single" | "linear" | "grid-tiles";
+    capacity: "none" | "cable";
+  }>,
 ): {
   partsCount: number;
   printMinutes: number;

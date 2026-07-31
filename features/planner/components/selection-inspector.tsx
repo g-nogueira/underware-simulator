@@ -1,15 +1,18 @@
 "use client";
 
-import { SYSTEM_SPECS } from "@/lib/planner.mjs";
 import { ROUTE_COLORS } from "../model/catalog";
 
-import type { PlannerFacade } from "../application/planner-provider";
+import {
+  usePartRegistry,
+  type PlannerFacade,
+} from "../application/planner-provider";
 
 export function SelectionInspector({
   planner,
 }: {
   planner: PlannerFacade;
 }) {
+  const partRegistry = usePartRegistry();
   const {
     routes,
     selectedRouteId,
@@ -19,10 +22,7 @@ export function SelectionInspector({
     selectedRoutePointIndex,
     selectedRoutePointIsBend,
     systemSpec,
-    capacity,
-    capacityState,
     selectedRouteLength,
-    selectedGridPlan,
     updateSelected,
     beginSelectionNameEdit,
     changeSelectionName,
@@ -333,176 +333,10 @@ export function SelectionInspector({
               </p>
             </section>
 
-            {selected.kind === "grid" && selectedGridPlan && (
-              <section className="inspector-section grid-config">
-                <div className="section-heading">
-                  <h2>openGrid coverage</h2>
-                  <strong>
-                    {selectedGridPlan.tileCount}{" "}
-                    {selectedGridPlan.tileCount === 1 ? "grid" : "grids"} to
-                    print
-                  </strong>
-                </div>
-                <div className="grid-coverage-summary">
-                  <span>
-                    <strong>
-                      {selectedGridPlan.cellsX} × {selectedGridPlan.cellsY}
-                    </strong>
-                    cells covered
-                  </span>
-                  <span>
-                    <strong>
-                      {selectedGridPlan.columns} × {selectedGridPlan.rows}
-                    </strong>
-                    printable tiles
-                  </span>
-                </div>
-                <div className="field-grid">
-                  <label>
-                    <span>Cells W</span>
-                    <span className="input-unit">
-                      <input
-                        type="number"
-                        min="1"
-                        value={selectedGridPlan.cellsX}
-                        onChange={(event) =>
-                          updateSelected({
-                            width:
-                              Math.max(1, Number(event.target.value)) *
-                              SYSTEM_SPECS.openGrid.grid,
-                          })
-                        }
-                      />
-                    </span>
-                  </label>
-                  <label>
-                    <span>Cells H</span>
-                    <span className="input-unit">
-                      <input
-                        type="number"
-                        min="1"
-                        value={selectedGridPlan.cellsY}
-                        onChange={(event) =>
-                          updateSelected({
-                            height:
-                              Math.max(1, Number(event.target.value)) *
-                              SYSTEM_SPECS.openGrid.grid,
-                          })
-                        }
-                      />
-                    </span>
-                  </label>
-                  <label>
-                    <span>Tile max W</span>
-                    <span className="input-unit">
-                      <input
-                        type="number"
-                        min="1"
-                        max="20"
-                        value={selected.maxTileCellsX ?? 8}
-                        onChange={(event) =>
-                          updateSelected({
-                            maxTileCellsX: Math.max(
-                              1,
-                              Number(event.target.value),
-                            ),
-                          })
-                        }
-                      />
-                    </span>
-                  </label>
-                  <label>
-                    <span>Tile max H</span>
-                    <span className="input-unit">
-                      <input
-                        type="number"
-                        min="1"
-                        max="20"
-                        value={selected.maxTileCellsY ?? 8}
-                        onChange={(event) =>
-                          updateSelected({
-                            maxTileCellsY: Math.max(
-                              1,
-                              Number(event.target.value),
-                            ),
-                          })
-                        }
-                      />
-                    </span>
-                  </label>
-                </div>
-                <p>
-                  Defaults to 8 × 8 cells (224 × 224 mm). Change the maximum
-                  tile size to match your printer bed; the print list splits
-                  edge grids automatically.
-                </p>
-              </section>
-            )}
-
-            {selected.kind === "channel" && (
-              <section className="inspector-section">
-                <div className="section-heading">
-                  <h2>Channel capacity</h2>
-                  <strong>
-                    {capacity} / {systemSpec.capacity} cables
-                  </strong>
-                </div>
-                <input
-                  className="capacity-range"
-                  type="range"
-                  min="0"
-                  max={systemSpec.capacity + 2}
-                  value={capacity}
-                  onChange={(event) =>
-                    updateSelected({ cables: Number(event.target.value) })
-                  }
-                  aria-label="Cables in selected channel"
-                />
-                <div
-                  className={`capacity-meter ${
-                    capacityState.level !== "ok" ? "warning" : ""
-                  }`}
-                >
-                  <i
-                    style={{ width: `${Math.min(capacityState.percent, 100)}%` }}
-                  />
-                </div>
-                <p
-                  className={
-                    capacityState.level !== "ok" ? "warning-copy" : ""
-                  }
-                >
-                  {capacityState.level === "over"
-                    ? "Over capacity. Split this route or use another channel."
-                    : capacityState.level === "near"
-                      ? "Near capacity. Leave room for bend tolerance."
-                      : `${100 - capacityState.percent}% spare capacity remains.`}
-                </p>
-              </section>
-            )}
-
-            {selected.kind === "power-brick" && (
-              <section className="inspector-section">
-                <div className="section-heading">
-                  <h2>Outlet layout</h2>
-                  <strong>{selected.outlets ?? 6} outlets</strong>
-                </div>
-                <input
-                  className="capacity-range"
-                  type="range"
-                  min="1"
-                  max="16"
-                  value={selected.outlets ?? 6}
-                  onChange={(event) =>
-                    updateSelected({ outlets: Number(event.target.value) })
-                  }
-                  aria-label="Power brick outlet count"
-                />
-                <p>
-                  Outlets reflow and scale automatically to fit the brick
-                  dimensions.
-                </p>
-              </section>
+            {partRegistry.resolve(selected)?.InspectorSections?.map(
+              (InspectorSection, index) => (
+                <InspectorSection key={index} item={selected} />
+              ),
             )}
 
             <section className="inspector-actions">
@@ -579,3 +413,4 @@ export function SelectionInspector({
     </>
   );
 }
+
