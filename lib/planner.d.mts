@@ -30,6 +30,19 @@ export function getPowerBrickOutletLayout(
   outletCount: number,
 ): Array<{ x: number; y: number; radius: number }>;
 
+export function getChannelGeometry(item: {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  rotation?: 0 | 90 | 180 | 270;
+  catalogId?: string;
+}): {
+  paths: string[];
+  branchWidth: number;
+  transform?: string;
+};
+
 export function calculateRouteLength(
   points: Array<[number, number]>,
 ): number;
@@ -62,6 +75,11 @@ export function calculateCableRouteGeometries(
 
 export function insertRouteBend(
   points: Array<[number, number]>,
+): Array<[number, number]>;
+
+export function removeRouteBend(
+  points: Array<[number, number]>,
+  pointIndex: number,
 ): Array<[number, number]>;
 
 export function resizeItemFromCorner(

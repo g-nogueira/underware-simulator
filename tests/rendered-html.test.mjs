@@ -33,4 +33,7 @@ test("renders development preview metadata", async () => {
   assert.match(html, developmentPreviewMeta);
   assert.match(html, /openGrid/);
   assert.match(html, /Layer order/);
+  assert.match(html, /Cable routes/);
+  assert.match(html, /Print plan/);
+  assert.match(html, /Desk setup/);
 });
