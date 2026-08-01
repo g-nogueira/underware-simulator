@@ -25,6 +25,42 @@ The displayed components are schematic planning representations. Generate the
 final printable parts with the official model tools and verify all dimensions
 before printing.
 
+## Architecture
+
+The planner is a vertical feature under `features/planner`:
+
+- `model/` owns stable plan types and the initial sample plan.
+- `parts/` owns the extension contract, built-in part modules, and the registry
+  that composes them.
+- `application/` owns use-case orchestration. Persistence, history, tracing, and
+  canvas pointer state have focused hooks; `PlannerProvider` only wires the
+  controller and contexts.
+- `components/` owns editor surfaces and generic extension hosts. The route
+  entry point delegates immediately to this feature.
+
+The sibling `lib/planner.mjs` module remains the framework-independent geometry,
+validation, and print-plan engine covered by Node tests.
+
+`PlannerPage` is the composition root. It injects a `PartRegistry` into the
+planner rather than letting application code import built-in parts. Each part
+definition composes catalogue metadata, defaults, placement/resize rules,
+rendering, optional inspector sections, availability, and print behaviour.
+Adding a shape with existing behaviours is therefore one definition; a shape
+with new presentation supplies its own renderer or inspector component without
+changing the editor surfaces. The core print engine receives the registry's
+plain print definitions instead of maintaining another catalogue switch.
+
+The facade exposes read-only state and named operations such as
+`addCatalogItem`, `updateSelected`, `moveSelectionLayer`, and
+`openPrintPlan`. React setters, undo stacks, trace storage, and mutable pointer
+refs remain behind the application boundary.
+
+This is deliberately lightweight inversion of control, not a plugin framework
+or dependency-injection container. A genuinely new domain concept (for example,
+a routed electrical circuit with new saved data) should still change the plan
+schema and validation explicitly. Open/closed is used to make new printable
+parts cheap, not to hide meaningful domain changes behind untyped callbacks.
+
 ## Development
 
 Prerequisites:
@@ -50,14 +86,6 @@ geometry, validation, bill-of-materials, and rendered-output tests.
 
 Pull requests run the same lint, build, artifact, and test checks through
 GitHub Actions.
-
-## Architecture
-
-- `app/`: React interface and interaction state
-- `lib/planner.mjs`: pure geometry, validation, and print-list logic
-- `tests/`: domain and rendered-output tests
-- `worker/`: Cloudflare-compatible server entry point
-- `.openai/hosting.json`: Sites deployment identity
 
 State is deliberately local-first: browser storage provides autosave, while
 JSON export/import provides portable plans without requiring a database or
