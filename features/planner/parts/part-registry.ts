@@ -94,8 +94,12 @@ export function createPartRegistry(
       if (!definition) return undefined;
       const placement = { ...DEFAULT_PLACEMENT, ...definition.placement };
       const partGrid = gridSize(definition, context.activeGrid);
-      const width = definition.catalog.widthCells * partGrid;
-      const height = definition.catalog.heightCells * partGrid;
+      const width =
+        definition.catalog.footprintMm?.width ??
+        definition.catalog.widthCells * partGrid;
+      const height =
+        definition.catalog.footprintMm?.height ??
+        definition.catalog.heightCells * partGrid;
 
       return {
         id: context.makeId(id),

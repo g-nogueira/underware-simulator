@@ -96,6 +96,8 @@ export type CatalogItem = {
   description: string;
   widthCells: number;
   heightCells: number;
+  /** Exact top-down footprint when the printable model is not cell-sized. */
+  footprintMm?: { width: number; height: number };
   featured?: boolean;
 };
 

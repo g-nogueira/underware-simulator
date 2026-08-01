@@ -97,6 +97,20 @@ test("keeps catalogue identifiers and categories open for extension", async () =
   );
 });
 
+test("supports exact printable footprints outside whole grid cells", async () => {
+  const types = await source("features/planner/model/types.ts");
+  const registry = await source("features/planner/parts/part-registry.ts");
+  const builtIns = await source("features/planner/parts/built-in-parts.tsx");
+
+  assert.match(types, /footprintMm\?: \{ width: number; height: number \}/);
+  assert.match(registry, /catalog\.footprintMm\?\.width/);
+  assert.match(registry, /catalog\.footprintMm\?\.height/);
+  assert.match(
+    builtIns,
+    /footprintMm: \{ width: 140\.01, height: 27\.2 \}/,
+  );
+});
+
 test("keeps concrete part IDs out of planner core", async () => {
   const featureRoot = path.join(root, "features/planner");
   const entries = await readdir(featureRoot, {
