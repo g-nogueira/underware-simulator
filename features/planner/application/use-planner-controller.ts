@@ -32,7 +32,7 @@ import type {
   SystemId,
   ToolId,
 } from "../model/types";
-import type { PartRegistry } from "../parts/contracts";
+import type { PartLibrary } from "../parts/contracts";
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max);
@@ -42,7 +42,8 @@ function makeId(prefix: string) {
   return prefix + "-" + Date.now() + "-" + Math.random().toString(16).slice(2);
 }
 
-export function usePlannerController(partRegistry: PartRegistry) {
+export function usePlannerController(partLibrary: PartLibrary) {
+  const partRegistry = partLibrary.registry;
   const [system, setSystem] = useState<SystemId>("openGrid");
   const [activeTool, setActiveTool] = useState<ToolId>("select");
   const [planName, setPlanName] = useState("Gustavo’s desk");
@@ -177,16 +178,21 @@ export function usePlannerController(partRegistry: PartRegistry) {
     emitLog,
     getItemGridSize: (item) =>
       partRegistry.gridSizeFor(item, systemSpec.grid),
+    getItemSnapAnchor: (item) => partRegistry.snapAnchorFor(item, system),
+    canResizeItem: (item) => partRegistry.canResize(item),
     getItemMinimumSize: (item) =>
       partRegistry.minimumSizeFor(item, systemSpec.grid),
   });
 
   const { savedAt, exportPlan, importPlan } = usePlanPersistence({
+    enabled: partLibrary.ready,
     planName,
     system,
     desk,
     items,
     routes,
+    getPartDefinitions: () => partRegistry.snapshotsFor(items),
+    preparePlanDefinitions: partLibrary.preparePlanDefinitions,
     restorePlan: restorePlanFile,
     checkpointHistory,
     initializeTrace,
@@ -226,15 +232,16 @@ export function usePlannerController(partRegistry: PartRegistry) {
   function changeSystem(nextSystem: SystemId) {
     if (nextSystem === system) return;
     checkpointHistory();
-    const nextGrid = SYSTEMS[nextSystem].grid;
+      const nextGrid = SYSTEMS[nextSystem].grid;
     setSystem(nextSystem);
     setItems((current) =>
       current.map((item) => {
         const itemGrid = partRegistry.gridSizeFor(item, nextGrid);
+        const anchor = partRegistry.snapAnchorFor(item, nextSystem);
         return {
           ...item,
-          x: snapToGrid(item.x, itemGrid),
-          y: snapToGrid(item.y, itemGrid),
+          x: snapToGrid(item.x + anchor.x, itemGrid) - anchor.x,
+          y: snapToGrid(item.y + anchor.y, itemGrid) - anchor.y,
         };
       }),
     );
@@ -329,6 +336,7 @@ export function usePlannerController(partRegistry: PartRegistry) {
     const next = partRegistry.create(partId, {
       desk,
       activeGrid: systemSpec.grid,
+      system,
       layer: layerStack.length,
       makeId,
       snapToGrid,
@@ -348,15 +356,25 @@ export function usePlannerController(partRegistry: PartRegistry) {
     });
   }
 
-  function updateSelected(patch: Partial<PlannerItem>, record = true) {
+  function updateSelected(
+    patch: Partial<PlannerItem>,
+    record = true,
+    enforceSizeLock = true,
+  ) {
     if (!selected) return;
+    const nextPatch = { ...patch };
+    if (enforceSizeLock && !partRegistry.canResize(selected)) {
+      delete nextPatch.width;
+      delete nextPatch.height;
+    }
+    if (Object.keys(nextPatch).length === 0) return;
     if (record) checkpointHistory();
     setItems((current) =>
       current.map((item) =>
-        item.id === selected.id ? { ...item, ...patch } : item,
+        item.id === selected.id ? { ...item, ...nextPatch } : item,
       ),
     );
-    emitLog("item.updated", { itemId: selected.id, ...patch });
+    emitLog("item.updated", { itemId: selected.id, ...nextPatch });
   }
 
   function beginSelectionNameEdit() {
@@ -419,6 +437,7 @@ export function usePlannerController(partRegistry: PartRegistry) {
 
   function rotateSelected(rotation: PlannerItem["rotation"]) {
     if (!selected || selected.rotation === rotation) return;
+    if (!partRegistry.allowedRotationsFor(selected).includes(rotation)) return;
     checkpointHistory();
     const parityChanged =
       Math.abs(selected.rotation - rotation) % 180 !== 0;
@@ -426,16 +445,34 @@ export function usePlannerController(partRegistry: PartRegistry) {
       updateSelected({ rotation }, false);
       return;
     }
-    const centerX = selected.x + selected.width / 2;
-    const centerY = selected.y + selected.height / 2;
+    const itemGrid = partRegistry.gridSizeFor(selected, systemSpec.grid);
+    const previousAnchor = partRegistry.snapAnchorFor(selected, system);
+    const nextItem = {
+      ...selected,
+      rotation,
+      width: selected.height,
+      height: selected.width,
+    };
+    const nextAnchor = partRegistry.snapAnchorFor(nextItem, system);
+    const anchorX = snapToGrid(selected.x + previousAnchor.x, itemGrid);
+    const anchorY = snapToGrid(selected.y + previousAnchor.y, itemGrid);
     updateSelected(
       {
         rotation,
         width: selected.height,
         height: selected.width,
-        x: snapToGrid(centerX - selected.height / 2, systemSpec.grid),
-        y: snapToGrid(centerY - selected.width / 2, systemSpec.grid),
+        x: clamp(
+          anchorX - nextAnchor.x,
+          0,
+          Math.max(0, desk.width - selected.height),
+        ),
+        y: clamp(
+          anchorY - nextAnchor.y,
+          0,
+          Math.max(0, desk.depth - selected.width),
+        ),
       },
+      false,
       false,
     );
   }
@@ -612,11 +649,9 @@ export function usePlannerController(partRegistry: PartRegistry) {
           removeRoute(selectedRoute.id);
         }
       } else if (!editing && event.key.toLowerCase() === "r" && selected) {
-        rotateSelected(
-          ([0, 90, 180, 270] as const)[
-            (([0, 90, 180, 270] as const).indexOf(selected.rotation) + 1) % 4
-          ],
-        );
+        const rotations = partRegistry.allowedRotationsFor(selected);
+        const index = rotations.indexOf(selected.rotation);
+        rotateSelected(rotations[(index + 1) % rotations.length]);
       }
     }
     window.addEventListener("keydown", handleKeyboard);
@@ -770,5 +805,3 @@ export function usePlannerController(partRegistry: PartRegistry) {
 }
 
 export type PlannerFacade = ReturnType<typeof usePlannerController>;
-
-

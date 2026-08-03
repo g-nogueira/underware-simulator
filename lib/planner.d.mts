@@ -15,6 +15,13 @@ export const SYSTEM_SPECS: Readonly<{
 
 export function snapToGrid(value: number, gridSize: number): number;
 
+export function rotateFootprintPoint(
+  point: { x: number; y: number },
+  width: number,
+  height: number,
+  rotation: 0 | 90 | 180 | 270,
+): { x: number; y: number };
+
 export function getCapacityState(
   cableCount: number,
   limit: number,
@@ -149,15 +156,23 @@ export function calculatePrintPlan(
     height: number;
     cables?: number;
     catalogId?: string;
+    partDefinition?: string;
     maxTileCellsX?: number;
     maxTileCellsY?: number;
   }>,
   systemId: SystemId,
   partDefinitions?: ReadonlyArray<{
     id: string;
+    definitionHash?: string;
     name: string;
-    strategy: "single" | "linear" | "grid-tiles";
+    strategy: "single" | "linear" | "grid-tiles" | "components";
     capacity: "none" | "cable";
+    components?: ReadonlyArray<{
+      id: string;
+      name: string;
+      quantity: number;
+      sizeMm: { x: number; y: number; z: number };
+    }>;
   }>,
 ): {
   partsCount: number;

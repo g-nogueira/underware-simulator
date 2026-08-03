@@ -237,11 +237,12 @@
           "items": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["id", "name", "quantity"],
+            "required": ["id", "name", "quantity", "sizeMm"],
             "properties": {
               "id": { "type": "string", "minLength": 1, "maxLength": 80 },
               "name": { "type": "string", "minLength": 1, "maxLength": 120 },
               "quantity": { "type": "integer", "minimum": 1, "maximum": 1000 },
+              "sizeMm": { "$ref": "#/$defs/positiveSize" },
               "fileName": { "type": "string", "maxLength": 255 },
               "artifactSha256": {
                 "type": "string",

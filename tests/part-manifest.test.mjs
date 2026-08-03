@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 
 import {
   PART_MANIFEST_API_VERSION,
+  hashPartManifest,
   compilePartManifest,
   validatePartManifest,
 } from "../lib/part-manifest.mjs";
@@ -47,8 +48,20 @@ test("compiles physical dimensions without grid-cell rounding", async () => {
       name: "Straight channel · 140.01 × 27.20 × 22.40 mm",
       quantity: 1,
       fileName: "monokini_I_channel_tex.scad",
+      sizeMm: { x: 140.01, y: 27.2, z: 22.4 },
     },
   ]);
+});
+
+test("hashes canonical manifest content to the release-pinned revision", async () => {
+  const manifest = await example();
+  const reordered = Object.fromEntries(Object.entries(manifest).reverse());
+
+  assert.equal(
+    await hashPartManifest(manifest),
+    "sha256:436313035d6279903f7f0668ec6d2249d3c11b4deb21823f5c84512c7db3c06d",
+  );
+  assert.equal(await hashPartManifest(reordered), await hashPartManifest(manifest));
 });
 
 test("rejects a visual scale that disagrees with the printable footprint", async () => {
@@ -104,6 +117,34 @@ test("rejects arbitrary executable capability names", async () => {
   assert.equal(result.ok, false);
   assert.ok(
     result.issues.some((entry) => entry.code === "unsupported_capability"),
+  );
+});
+
+test("rejects unknown fields and physical points outside the footprint", async () => {
+  const manifest = await example();
+  manifest.execute = "alert(1)";
+  manifest.mounting[0].snapAnchorMm.x = 999;
+  const result = validatePartManifest(manifest);
+
+  assert.equal(result.ok, false);
+  assert.ok(result.issues.some((entry) => entry.code === "unknown_property"));
+  assert.ok(
+    result.issues.some((entry) => entry.code === "point_outside_footprint"),
+  );
+});
+
+test("requires exact dimensions for every printable component", async () => {
+  const manifest = await example();
+  delete manifest.print.components[0].sizeMm;
+  const result = validatePartManifest(manifest);
+
+  assert.equal(result.ok, false);
+  assert.ok(
+    result.issues.some(
+      (entry) =>
+        entry.path === "print.components.0.sizeMm" &&
+        entry.code === "required",
+    ),
   );
 });
 

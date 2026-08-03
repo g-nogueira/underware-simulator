@@ -41,6 +41,10 @@ type CanvasInteractionOptions = {
     level?: "info" | "warn",
   ) => void;
   getItemGridSize: (item: PlannerItem) => number;
+  getItemSnapAnchor: (
+    item: PlannerItem,
+  ) => Readonly<{ x: number; y: number }>;
+  canResizeItem: (item: PlannerItem) => boolean;
   getItemMinimumSize: (
     item: PlannerItem,
   ) => { width: number; height: number };
@@ -77,6 +81,8 @@ export function useCanvasInteractions({
   checkpointHistory,
   emitLog,
   getItemGridSize,
+  getItemSnapAnchor,
+  canResizeItem,
   getItemMinimumSize,
 }: CanvasInteractionOptions) {
   const interactionRef = useRef<CanvasInteraction | null>(null);
@@ -125,7 +131,7 @@ export function useCanvasInteractions({
     item: PlannerItem,
     corner: ResizeCorner,
   ) {
-    if (activeTool !== "select") return;
+    if (activeTool !== "select" || !canResizeItem(item)) return;
     event.stopPropagation();
     checkpointHistory();
     event.currentTarget.setPointerCapture(event.pointerId);
@@ -189,13 +195,18 @@ export function useCanvasInteractions({
       const moving = items.find((item) => item.id === active.id);
       if (!moving) return;
       const movingGrid = getItemGridSize(moving);
-      const nextX = snapToGrid(
-        clamp(local.x - active.dx, 0, desk.width - moving.width),
-        movingGrid,
+      const anchor = getItemSnapAnchor(moving);
+      const nextX = clamp(
+        snapToGrid(local.x - active.dx + anchor.x, movingGrid) -
+          anchor.x,
+        0,
+        Math.max(0, desk.width - moving.width),
       );
-      const nextY = snapToGrid(
-        clamp(local.y - active.dy, 0, desk.depth - moving.height),
-        movingGrid,
+      const nextY = clamp(
+        snapToGrid(local.y - active.dy + anchor.y, movingGrid) -
+          anchor.y,
+        0,
+        Math.max(0, desk.depth - moving.height),
       );
       setItems((current) =>
         current.map((item) =>
@@ -207,6 +218,7 @@ export function useCanvasInteractions({
 
     if (active.type === "resize-item") {
       const start = active.startItem;
+      if (!canResizeItem(start)) return;
       const resizeGrid = getItemGridSize(start);
       const minimumSize = getItemMinimumSize(start);
       const resized = resizeItemFromCorner(

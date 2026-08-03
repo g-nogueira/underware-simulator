@@ -1,8 +1,8 @@
 # Spike: JSON-ingestable printable parts
 
-Status: **decision pending**
+Status: **option A + B selected and implemented in this PR**
 
-Candidate contract: `underware.parts/v1alpha1`
+Runtime contract: `underware.parts/v1alpha1`
 
 Interactive laboratory: `/spikes/json-parts`
 
@@ -155,9 +155,9 @@ Cons:
 Best use: a later adapter that produces the same manifest; never make the plan
 depend on live scraping.
 
-## Provisional recommendation
+## Selected implementation
 
-Use a staged hybrid, subject to a decision after reviewing this spike:
+The selected staged hybrid is:
 
 1. Keep release-owned parts as build-time JSON.
 2. Add runtime import of the same self-contained JSON + inline SVG contract.
@@ -226,8 +226,8 @@ correctness.
 
 ## Plan and catalogue lifecycle
 
-The current plan file stores `catalogId` plus mutable instance width/height. A
-portable custom catalogue needs a future plan revision with:
+Plan file version 2 stores a content-addressed definition table alongside the
+ordinary item instances:
 
 ```json
 {
@@ -237,9 +237,11 @@ portable custom catalogue needs a future plan revision with:
   "items": [
     {
       "partDefinition": "sha256:<content hash>",
-      "xMm": 420,
-      "yMm": 280,
-      "rotationDeg": 90,
+      "catalogId": "makerworld.example.part",
+      "partDefinition": "sha256:<content hash>",
+      "x": 420,
+      "y": 280,
+      "rotation": 90,
       "layer": 4
     }
   ]
@@ -261,11 +263,18 @@ Rules:
 This keeps an old plan reproducible even if its source page or local catalogue
 changes later.
 
-## Advanced-mode editor options
+## Advanced-mode editor
+
+The first production implementation uses the native textarea with live
+validation, import/export, inert SVG preview, immutable revision installation,
+and editing of device-local manifests. This keeps the runtime dependency small
+while the schema stabilizes. CodeMirror remains the likely next editor upgrade.
+
+Options considered:
 
 | Editor | Pros | Cons | Fit now |
 |---|---|---|---|
-| Native textarea | Zero dependency, tiny, adequate for this spike | No syntax highlighting, schema completion, or inline diagnostics | Spike only |
+| Native textarea | Zero dependency, tiny, live validation and diagnostics | No syntax highlighting or schema completion | Selected for v1alpha1 |
 | CodeMirror 6 | Modular, lighter-weight editor with lint extension points | Schema completion/field diagnostics need integration work | Best first production choice |
 | Monaco | Excellent JSON Schema completion and familiar VS Code UX | Largest integration and worker/bundle cost | Too heavy for the first version |
 | Generated form + raw JSON toggle | Friendly for non-developers; preserves advanced mode | Complex fields and SVG still need custom controls; two synchronized views | Add after the contract stabilizes |
@@ -289,19 +298,17 @@ then exposed as a versioned capability that manifests may reference. This keeps
 the planner open for data-defined parts without creating an untyped programming
 language in JSON.
 
-## Decision requested
+## Implemented boundary
 
-Choose the next implementation boundary:
-
-1. **A only** — migrate built-ins to JSON, no runtime user import yet.
-2. **A + B (provisional recommendation)** — one contract for built-ins and
-   self-contained user imports; add pinned definition snapshots to plans.
-3. **A + C** — start directly with ZIP packs and separate SVG/3MF assets.
-4. **More research** — do not implement ingestion until MakerWorld/3MF workflow
-   constraints are clearer.
-
-The choice should be made before wiring the candidate loader into the production
-`PartRegistry` or changing the plan-file version.
+- Release-owned JSON manifests compile through the same capability adapter as
+  runtime imports.
+- Runtime manifests are validated, SHA-256 addressed, and stored locally.
+- Fixed printable parts cannot be resized in the canvas or inspector.
+- Rotations preserve the exact X/Y footprint and grid-aligned mounting anchor.
+- Plan v2 embeds each referenced manifest revision once and verifies its hash
+  and exact item dimensions on import.
+- Print components include their own X/Y/Z dimensions, so multi-component BOMs
+  do not guess from the assembled footprint.
 
 ## References
 

@@ -191,3 +191,4 @@ export const BUILT_IN_PARTS = [
 ] as const satisfies readonly PartDefinition[];
 
 export const DEFAULT_PART_REGISTRY = createPartRegistry(BUILT_IN_PARTS);
+

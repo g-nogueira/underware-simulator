@@ -62,9 +62,10 @@ test("injects part composition through an application-owned interface", async ()
     "features/planner/application/use-planner-controller.ts",
   );
 
-  assert.match(page, /partRegistry=\{DEFAULT_PART_REGISTRY\}/);
-  assert.match(provider, /partRegistry: PartRegistry/);
-  assert.match(controller, /usePlannerController\(partRegistry: PartRegistry\)/);
+  assert.match(page, /const partLibrary = usePartLibrary\(\)/);
+  assert.match(page, /partLibrary=\{partLibrary\}/);
+  assert.match(provider, /partLibrary: PartLibrary/);
+  assert.match(controller, /usePlannerController\(partLibrary: PartLibrary\)/);
   assert.doesNotMatch(controller, /built-in-parts|BUILT_IN_PARTS|PART_CATALOG/);
 });
 
@@ -123,7 +124,12 @@ test("keeps concrete part IDs out of planner core", async () => {
   for (const entry of entries) {
     if (!entry.isFile() || !/\.(?:ts|tsx)$/.test(entry.name)) continue;
     const filePath = path.join(entry.parentPath, entry.name);
-    if (filePath.endsWith(path.join("parts", "built-in-parts.tsx"))) continue;
+    if (
+      filePath.endsWith(path.join("parts", "built-in-parts.tsx")) ||
+      filePath.endsWith(path.join("parts", "build-time-manifests.ts"))
+    ) {
+      continue;
+    }
     assert.doesNotMatch(await readFile(filePath, "utf8"), concreteIds, filePath);
   }
 });

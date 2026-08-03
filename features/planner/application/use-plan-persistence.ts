@@ -12,11 +12,16 @@ import type {
 } from "../model/types";
 
 type PlanPersistenceOptions = {
+  enabled: boolean;
   planName: string;
   system: SystemId;
   desk: { width: number; depth: number };
   items: PlannerItem[];
   routes: CableRoute[];
+  getPartDefinitions: () => Record<string, unknown>;
+  preparePlanDefinitions: (
+    plan: PlanFile,
+  ) => Promise<{ ok: true } | { ok: false; reason: string }>;
   restorePlan: (plan: PlanFile) => void;
   checkpointHistory: () => void;
   initializeTrace: (
@@ -46,6 +51,22 @@ function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : "unknown";
 }
 
+function currentPlan(
+  options: PlanPersistenceOptions,
+  savedAt: string,
+): PlanFile {
+  return {
+    version: 2,
+    name: options.planName,
+    system: options.system,
+    desk: options.desk,
+    items: options.items,
+    routes: options.routes,
+    partDefinitions: options.getPartDefinitions(),
+    savedAt,
+  };
+}
+
 /** Owns the browser-storage and portable-file boundary for a plan. */
 export function usePlanPersistence(options: PlanPersistenceOptions) {
   const [readyToSave, setReadyToSave] = useState(false);
@@ -57,67 +78,81 @@ export function usePlanPersistence(options: PlanPersistenceOptions) {
   }, [options]);
 
   useEffect(() => {
+    if (!options.enabled) return;
+    let cancelled = false;
     const frame = window.requestAnimationFrame(() => {
-      const current = optionsRef.current;
-      const saved = attemptStorage(() =>
-        window.localStorage.getItem(AUTOSAVE_KEY),
-      );
-      let restored = false;
-      let removalFailure: unknown;
-      if (saved.ok && saved.value) {
-        try {
-          const result = validatePlanFile(JSON.parse(saved.value)) as {
-            ok: boolean;
-            plan?: PlanFile;
-          };
-          if (result.ok && result.plan) {
-            current.restorePlan(result.plan);
-            setSavedAt(result.plan.savedAt ?? "restored");
-            restored = true;
+      void (async () => {
+        const current = optionsRef.current;
+        const saved = attemptStorage(() =>
+          window.localStorage.getItem(AUTOSAVE_KEY),
+        );
+        let restored = false;
+        let removalFailure: unknown;
+        if (saved.ok && saved.value) {
+          try {
+            const result = validatePlanFile(JSON.parse(saved.value)) as {
+              ok: boolean;
+              reason?: string;
+              plan?: PlanFile;
+            };
+            const prepared =
+              result.ok && result.plan
+                ? await current.preparePlanDefinitions(result.plan)
+                : {
+                    ok: false as const,
+                    reason: result.reason ?? "Invalid plan",
+                  };
+            if (!cancelled && result.ok && result.plan && prepared.ok) {
+              current.restorePlan(result.plan);
+              setSavedAt(result.plan.savedAt ?? "restored");
+              restored = true;
+            }
+            if (!prepared.ok) {
+              const removed = attemptStorage(() =>
+                window.localStorage.removeItem(AUTOSAVE_KEY),
+              );
+              if (!removed.ok) removalFailure = removed.error;
+            }
+          } catch {
+            const removed = attemptStorage(() =>
+              window.localStorage.removeItem(AUTOSAVE_KEY),
+            );
+            if (!removed.ok) removalFailure = removed.error;
           }
-        } catch {
-          const removed = attemptStorage(() =>
-            window.localStorage.removeItem(AUTOSAVE_KEY),
-          );
-          if (!removed.ok) removalFailure = removed.error;
         }
-      }
 
-      current.initializeTrace(
-        restored ? "plan.autosave_restored" : "plan.started",
-      );
-      if (!saved.ok) {
-        current.emitLog(
-          "plan.autosave_read_failed",
-          { reason: errorMessage(saved.error) },
-          "warn",
+        if (cancelled) return;
+        current.initializeTrace(
+          restored ? "plan.autosave_restored" : "plan.started",
         );
-      } else if (removalFailure) {
-        current.emitLog(
-          "plan.autosave_cleanup_failed",
-          { reason: errorMessage(removalFailure) },
-          "warn",
-        );
-      }
-      setReadyToSave(true);
+        if (!saved.ok) {
+          current.emitLog(
+            "plan.autosave_read_failed",
+            { reason: errorMessage(saved.error) },
+            "warn",
+          );
+        } else if (removalFailure) {
+          current.emitLog(
+            "plan.autosave_cleanup_failed",
+            { reason: errorMessage(removalFailure) },
+            "warn",
+          );
+        }
+        setReadyToSave(true);
+      })();
     });
-    return () => window.cancelAnimationFrame(frame);
-  }, []);
+    return () => {
+      cancelled = true;
+      window.cancelAnimationFrame(frame);
+    };
+  }, [options.enabled]);
 
   useEffect(() => {
     if (!readyToSave) return;
     const timeout = window.setTimeout(() => {
       const current = optionsRef.current;
       const timestamp = new Date().toISOString();
-      const plan: PlanFile = {
-        version: 1,
-        name: current.planName,
-        system: current.system,
-        desk: current.desk,
-        items: current.items,
-        routes: current.routes,
-        savedAt: timestamp,
-      };
+      const plan = currentPlan(current, timestamp);
       const saved = attemptStorage(() =>
         window.localStorage.setItem(AUTOSAVE_KEY, JSON.stringify(plan)),
       );
@@ -143,15 +178,7 @@ export function usePlanPersistence(options: PlanPersistenceOptions) {
 
   function exportPlan() {
     const current = optionsRef.current;
-    const plan: PlanFile = {
-      version: 1,
-      name: current.planName,
-      system: current.system,
-      desk: current.desk,
-      items: current.items,
-      routes: current.routes,
-      savedAt: new Date().toISOString(),
-    };
+    const plan = currentPlan(current, new Date().toISOString());
     const blob = new Blob([JSON.stringify(plan, null, 2)], {
       type: "application/json",
     });
@@ -186,6 +213,8 @@ export function usePlanPersistence(options: PlanPersistenceOptions) {
         plan?: PlanFile;
       };
       if (!result.ok || !result.plan) throw new Error(result.reason);
+      const prepared = await current.preparePlanDefinitions(result.plan);
+      if (!prepared.ok) throw new Error(prepared.reason);
       current.checkpointHistory();
       current.restorePlan(result.plan);
       current.showToast("Plan imported");

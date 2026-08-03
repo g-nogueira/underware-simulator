@@ -4,7 +4,10 @@ import {
   getCapacityState,
 } from "@/lib/planner.mjs";
 
-import { usePlanner } from "../application/planner-provider";
+import {
+  usePartRegistry,
+  usePlanner,
+} from "../application/planner-provider";
 import type { PartInspectorProps } from "./contracts";
 
 function parsePositiveNumber(
@@ -203,6 +206,57 @@ export function PowerBrickOutletInspector({ item }: PartInspectorProps) {
         aria-label="Power brick outlet count"
       />
       <p>Outlets reflow and scale automatically to fit the brick dimensions.</p>
+    </section>
+  );
+}
+
+export function ManifestPartInspector({ item }: PartInspectorProps) {
+  const registry = usePartRegistry();
+  const definition = registry.resolve(item);
+  const manifest = definition?.manifest?.snapshot;
+  if (!manifest) return null;
+
+  const { x, y, z } = manifest.physical.sizeMm;
+  const componentCount = manifest.print.components.reduce(
+    (total, component) => total + component.quantity,
+    0,
+  );
+
+  return (
+    <section className="inspector-section manifest-part-details">
+      <div className="section-heading">
+        <h2>Printable model</h2>
+        <strong>Exact size locked</strong>
+      </div>
+      <dl>
+        <div>
+          <dt>Physical size</dt>
+          <dd>
+            {x} × {y} × {z} mm
+          </dd>
+        </div>
+        <div>
+          <dt>Manifest</dt>
+          <dd>v{manifest.version}</dd>
+        </div>
+        <div>
+          <dt>Print output</dt>
+          <dd>
+            {componentCount} {componentCount === 1 ? "component" : "components"}
+          </dd>
+        </div>
+      </dl>
+      <a
+        href={manifest.metadata.source.url}
+        target="_blank"
+        rel="noreferrer"
+      >
+        Open source model ↗
+      </a>
+      <p>
+        Width and depth stay pinned to this exact printable definition. Editing
+        the JSON creates a new revision; existing placements keep this one.
+      </p>
     </section>
   );
 }

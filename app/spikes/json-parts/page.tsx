@@ -91,7 +91,7 @@ export default function JsonPartsSpikePage() {
     <main className="manifest-spike-page">
       <header className="manifest-spike-header">
         <div>
-          <span className="manifest-kicker">Architecture spike · candidate v1alpha1</span>
+          <span className="manifest-kicker">Manifest contract · v1alpha1</span>
           <h1>JSON part manifest laboratory</h1>
           <p>
             Edit a self-contained part definition and verify its physical size,
@@ -102,10 +102,10 @@ export default function JsonPartsSpikePage() {
       </header>
 
       <section className="manifest-spike-notice">
-        <strong>Decision aid, not production import</strong>
+        <strong>The production importer is now available under + Parts</strong>
         <span>
-          This isolated route proves the proposed contract and safety rules. It
-          does not install the part into your saved catalogue yet.
+          This isolated route remains a validation laboratory. Use Import JSON /
+          advanced mode in the planner to install a manifest on this device.
         </span>
       </section>
 
