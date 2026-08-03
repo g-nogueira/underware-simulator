@@ -60,4 +60,3 @@ export function usePlanHistory({
 
   return { historyState, checkpointHistory, undoPlan, redoPlan };
 }
-

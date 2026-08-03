@@ -205,4 +205,3 @@ export function ItemVisual({ item }: { item: PlannerItem }) {
     registry.resolve(item)?.Renderer ?? LEGACY_RENDERERS[item.kind];
   return <Renderer item={item} />;
 }
-

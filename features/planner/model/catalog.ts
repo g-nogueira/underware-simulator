@@ -36,4 +36,3 @@ export const ROUTE_COLORS = [
   "#39d98a",
   "#ff6b6b",
 ] as const;
-

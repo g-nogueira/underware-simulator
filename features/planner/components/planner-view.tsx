@@ -17,4 +17,3 @@ export function PlannerView() {
     </main>
   );
 }
-
