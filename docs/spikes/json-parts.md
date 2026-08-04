@@ -166,6 +166,14 @@ The selected staged hybrid is:
 5. Add MakerWorld/other provider adapters only when an official, maintainable
    integration path exists; adapters must output the same manifest.
 
+The release catalogue now follows that split. Every existing catalogue entry
+is a JSON file. The dimensionally verified straight channel uses the public
+fixed-variant contract. The older resizable catalogue tools are JSON planning
+templates marked `grid-derived` and `generator-required`, because their final Z
+dimension and printable output depend on parameters selected in the external
+generator. This keeps their current editor behaviour without fabricating an
+exact model revision.
+
 This avoids two bad extremes: hard-coding every part in TypeScript, and turning
 JSON into an executable mini-language.
 

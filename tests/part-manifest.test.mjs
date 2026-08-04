@@ -16,6 +16,10 @@ const examplePath = path.join(
   root,
   "spikes/json-parts/examples/straight-channel.part.json",
 );
+const builtInStraightPath = path.join(
+  root,
+  "features/planner/parts/manifests/straight-channel.part.json",
+);
 
 async function example() {
   return JSON.parse(await readFile(examplePath, "utf8"));
@@ -62,6 +66,22 @@ test("hashes canonical manifest content to the release-pinned revision", async (
     "sha256:436313035d6279903f7f0668ec6d2249d3c11b4deb21823f5c84512c7db3c06d",
   );
   assert.equal(await hashPartManifest(reordered), await hashPartManifest(manifest));
+});
+
+test("ships the existing straight channel through the public JSON compiler", async () => {
+  const manifest = JSON.parse(await readFile(builtInStraightPath, "utf8"));
+  const result = compilePartManifest(manifest);
+
+  assert.equal(result.ok, true);
+  assert.equal(result.part.catalog.id, "straight-channel");
+  assert.deepEqual(result.part.catalog.footprintMm, {
+    width: 140.01,
+    height: 27.2,
+  });
+  assert.equal(
+    await hashPartManifest(manifest),
+    "sha256:43593666c9f9a1d42f4d1acb0c7fa9bc484f06131a603d462a826df66c933e2a",
+  );
 });
 
 test("rejects a visual scale that disagrees with the printable footprint", async () => {

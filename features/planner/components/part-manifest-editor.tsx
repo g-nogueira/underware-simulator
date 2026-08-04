@@ -164,6 +164,16 @@ export function PartManifestEditor({
 
   function loadInstalled(hash: string) {
     setSelectedInstalledHash(hash);
+    const releaseEntry = BUILD_TIME_MANIFESTS.find(
+      (candidate) => candidate.hash === hash,
+    );
+    if (releaseEntry) {
+      setText(JSON.stringify(releaseEntry.manifest, null, 2));
+      setStatus(
+        "Loaded a release manifest. Keep it unchanged, or give an edited copy a new unique ID before installing.",
+      );
+      return;
+    }
     const entry = library.installedManifests.find(
       (candidate) => candidate.hash === hash,
     );
@@ -250,12 +260,18 @@ export function PartManifestEditor({
 
         <div className="part-manifest-library-row">
           <label>
-            <span>Edit an installed part</span>
+            <span>Edit a printable manifest</span>
             <select
               value={selectedInstalledHash}
               onChange={(event) => loadInstalled(event.target.value)}
             >
               <option value="">New manifest / example</option>
+              {BUILD_TIME_MANIFESTS.map((entry) => (
+                <option key={entry.hash} value={entry.hash}>
+                  Release · {entry.manifest.metadata.name} · v
+                  {entry.manifest.version}
+                </option>
+              ))}
               {library.installedManifests.map((entry) => (
                 <option key={entry.hash} value={entry.hash}>
                   {entry.manifest.metadata.name} · v{entry.manifest.version}

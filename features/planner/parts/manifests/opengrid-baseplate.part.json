@@ -1,0 +1,42 @@
+{
+  "$schema": "./release-part.schema.json",
+  "apiVersion": "underware.release-part/v1alpha1",
+  "catalog": {
+    "id": "opengrid-baseplate",
+    "kind": "grid",
+    "name": "openGrid baseplate",
+    "icon": "▦",
+    "category": "Foundation",
+    "description": "Resizable coverage area split into printable grid tiles.",
+    "widthCells": 8,
+    "heightCells": 8,
+    "featured": true
+  },
+  "provenance": {
+    "sourceUrl": "https://makerworld.com/en/models/1304337-opengrid-tile-generator",
+    "license": "Verify the selected generator profile before printing"
+  },
+  "physical": {
+    "units": "mm",
+    "sizing": "grid-derived",
+    "printReadiness": "generator-required"
+  },
+  "capabilities": {
+    "renderer": "grid/v1",
+    "inspectors": ["grid-coverage/v1"]
+  },
+  "defaults": {
+    "maxTileCellsX": 8,
+    "maxTileCellsY": 8
+  },
+  "availability": { "system": "openGrid" },
+  "placement": {
+    "grid": "openGrid",
+    "layer": "back",
+    "resizing": "free"
+  },
+  "appearance": { "shadow": false },
+  "print": { "strategy": "grid-tiles", "capacity": "none" },
+  "tool": "grid",
+  "legacyKind": "grid"
+}

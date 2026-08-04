@@ -9,7 +9,6 @@ import {
 
 import type { PlannerItem } from "../model/types";
 import { BUILT_IN_PARTS } from "./built-in-parts";
-import { BUILD_TIME_MANIFESTS } from "./build-time-manifests";
 import type {
   InstalledPartManifest,
   PartDefinition,
@@ -130,19 +129,13 @@ export function usePartLibrary(): PartLibrary {
 
   const registry = useMemo(() => {
     const definitions: PartDefinition[] = [...BUILT_IN_PARTS];
-    const knownHashes = new Set<string>();
-
-    for (const entry of BUILD_TIME_MANIFESTS) {
-      knownHashes.add(entry.hash);
-      definitions.push(
-        createManifestPartDefinition({
-          manifest: entry.manifest,
-          definitionHash: entry.hash,
-          origin: "build-time",
-          catalogVisible: true,
-        }),
-      );
-    }
+    const knownHashes = new Set(
+      BUILT_IN_PARTS.flatMap((definition) =>
+        definition.manifest
+          ? [definition.manifest.definitionHash]
+          : [],
+      ),
+    );
 
     const latestHashById = new Map(
       latestEntries(runtimeEntries).map((entry) => [

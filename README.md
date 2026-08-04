@@ -70,8 +70,14 @@ their old dimensions and rendering. Exported plan v2 files embed every
 referenced revision once, so importing the plan does not depend on a live model
 page or the recipient already having that part installed.
 
-Release-owned manifests use the same validation and compilation path. See the
-worked manifest and JSON Schema under `spikes/json-parts/`.
+Every release catalogue entry is stored as JSON under
+`features/planner/parts/manifests/`. Exact printable variants use the same
+validation and compilation path as runtime imports. Existing resizable tools
+whose final Z/model output depends on an external generator are explicitly
+marked `grid-derived` and `generator-required`; their JSON selects only finite,
+app-owned renderer and inspector capabilities and does not pretend that a
+schematic footprint is an immutable printable file. See the worked manifest and
+JSON Schema under `spikes/json-parts/`.
 
 This is deliberately lightweight inversion of control, not a plugin framework
 or dependency-injection container. A genuinely new domain concept (for example,
