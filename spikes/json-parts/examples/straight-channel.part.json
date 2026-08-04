@@ -1,0 +1,114 @@
+{
+  "$schema": "../underware-part.schema.json",
+  "apiVersion": "underware.parts/v1alpha1",
+  "id": "makerworld.1329404.straight-channel.140mm",
+  "version": "1.0.0",
+  "metadata": {
+    "name": "Straight channel · 140 mm",
+    "icon": "━",
+    "category": "Cable routing",
+    "description": "Fixed printable variant of the Underware for openGrid I channel.",
+    "tags": ["underware", "openGrid", "channel", "makerworld"],
+    "source": {
+      "provider": "makerworld",
+      "url": "https://makerworld.com/en/models/1329404-underware-for-opengrid-customizer#profileId-1367368",
+      "modelId": "1329404",
+      "profileId": "1367368"
+    },
+    "license": {
+      "status": "unknown",
+      "sourceUrl": "https://makerworld.com/en/models/1329404-underware-for-opengrid-customizer#profileId-1367368"
+    }
+  },
+  "physical": {
+    "units": "mm",
+    "sizeMm": {
+      "x": 140.01,
+      "y": 27.2,
+      "z": 22.4
+    },
+    "clearanceMm": {
+      "left": 0,
+      "right": 0,
+      "top": 0,
+      "bottom": 0,
+      "above": 5
+    }
+  },
+  "placement": {
+    "resizing": "fixed",
+    "allowedRotations": [0, 90, 180, 270],
+    "defaultLayer": "front"
+  },
+  "mounting": [
+    {
+      "system": "openGrid",
+      "snapAnchorMm": {
+        "x": 14,
+        "y": 13.6
+      },
+      "attachmentPointsMm": [
+        {
+          "id": "mount-left",
+          "x": 14,
+          "y": 13.6
+        },
+        {
+          "id": "mount-right",
+          "x": 126,
+          "y": 13.6
+        }
+      ]
+    }
+  ],
+  "ports": [
+    {
+      "id": "cable-in",
+      "kind": "cable",
+      "positionMm": {
+        "x": 0,
+        "y": 13.6
+      },
+      "directionDeg": 180
+    },
+    {
+      "id": "cable-out",
+      "kind": "cable",
+      "positionMm": {
+        "x": 140.01,
+        "y": 13.6
+      },
+      "directionDeg": 0
+    }
+  ],
+  "capabilities": {
+    "renderer": "svg/v1",
+    "sizing": "fixed/v1",
+    "print": "components/v1",
+    "capacity": "system-cable/v1"
+  },
+  "defaults": {
+    "cables": 0
+  },
+  "visual": {
+    "type": "svg",
+    "coordinateSpace": "physical-mm",
+    "viewBoxMm": [0, 0, 140.01, 27.2],
+    "svg": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 140.01 27.2\"><rect x=\"0.5\" y=\"0.5\" width=\"139.01\" height=\"26.2\" rx=\"5\" fill=\"#202f3b\" stroke=\"#56d7e4\"/><path d=\"M 7 13.6 H 133\" fill=\"none\" stroke=\"#071016\" stroke-width=\"9\" stroke-linecap=\"round\"/><path d=\"M 7 13.6 H 133\" fill=\"none\" stroke=\"#56d7e4\" stroke-width=\"2\" stroke-linecap=\"round\"/></svg>"
+  },
+  "print": {
+    "components": [
+      {
+        "id": "channel-body",
+        "name": "Straight channel · 140.01 × 27.20 × 22.40 mm",
+        "quantity": 1,
+        "fileName": "monokini_I_channel_tex.scad",
+        "sizeMm": {
+          "x": 140.01,
+          "y": 27.2,
+          "z": 22.4
+        }
+      }
+    ]
+  }
+}

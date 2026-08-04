@@ -1,0 +1,257 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://underware-simulator.example/schemas/underware-part-v1alpha1.schema.json",
+  "title": "Underware Simulator part manifest v1alpha1",
+  "description": "Candidate schema for a fixed-size printable part with a dimensionally accurate SVG representation.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "apiVersion",
+    "id",
+    "version",
+    "metadata",
+    "physical",
+    "placement",
+    "mounting",
+    "capabilities",
+    "visual",
+    "print"
+  ],
+  "properties": {
+    "$schema": { "type": "string", "format": "uri-reference" },
+    "apiVersion": { "const": "underware.parts/v1alpha1" },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]{2,127}$"
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+(?:-[0-9A-Za-z.-]+)?$"
+    },
+    "metadata": { "$ref": "#/$defs/metadata" },
+    "physical": { "$ref": "#/$defs/physical" },
+    "placement": { "$ref": "#/$defs/placement" },
+    "mounting": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/mounting" }
+    },
+    "ports": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/port" }
+    },
+    "capabilities": { "$ref": "#/$defs/capabilities" },
+    "defaults": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "cables": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "visual": { "$ref": "#/$defs/visual" },
+    "print": { "$ref": "#/$defs/print" }
+  },
+  "$defs": {
+    "positiveSize": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["x", "y", "z"],
+      "properties": {
+        "x": { "type": "number", "exclusiveMinimum": 0 },
+        "y": { "type": "number", "exclusiveMinimum": 0 },
+        "z": { "type": "number", "exclusiveMinimum": 0 }
+      }
+    },
+    "point2d": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["x", "y"],
+      "properties": {
+        "x": { "type": "number" },
+        "y": { "type": "number" }
+      }
+    },
+    "identifiedPoint2d": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "x", "y"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "x": { "type": "number" },
+        "y": { "type": "number" }
+      }
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "category", "description", "source", "license"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "icon": { "type": "string", "minLength": 1, "maxLength": 8 },
+        "category": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "description": { "type": "string", "minLength": 1, "maxLength": 500 },
+        "tags": {
+          "type": "array",
+          "uniqueItems": true,
+          "maxItems": 20,
+          "items": { "type": "string", "minLength": 1, "maxLength": 40 }
+        },
+        "source": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["provider", "url"],
+          "properties": {
+            "provider": { "enum": ["makerworld", "local", "other"] },
+            "url": { "type": "string", "format": "uri" },
+            "modelId": { "type": "string", "maxLength": 100 },
+            "profileId": { "type": "string", "maxLength": 100 },
+            "creator": { "type": "string", "maxLength": 100 },
+            "artifactSha256": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            }
+          }
+        },
+        "license": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "sourceUrl"],
+          "properties": {
+            "status": { "enum": ["declared", "unknown"] },
+            "name": { "type": "string", "maxLength": 160 },
+            "spdxId": { "type": "string", "maxLength": 80 },
+            "sourceUrl": { "type": "string", "format": "uri" }
+          }
+        }
+      }
+    },
+    "physical": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["units", "sizeMm"],
+      "properties": {
+        "units": { "const": "mm" },
+        "sizeMm": { "$ref": "#/$defs/positiveSize" },
+        "clearanceMm": {
+          "description": "Optional installation clearance kept separate from the physical footprint.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["left", "right", "top", "bottom", "above"],
+          "properties": {
+            "left": { "type": "number", "minimum": 0 },
+            "right": { "type": "number", "minimum": 0 },
+            "top": { "type": "number", "minimum": 0 },
+            "bottom": { "type": "number", "minimum": 0 },
+            "above": { "type": "number", "minimum": 0 }
+          }
+        }
+      }
+    },
+    "placement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["resizing", "allowedRotations", "defaultLayer"],
+      "properties": {
+        "resizing": { "const": "fixed" },
+        "allowedRotations": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "enum": [0, 90, 180, 270] }
+        },
+        "defaultLayer": { "enum": ["back", "front"] }
+      }
+    },
+    "mounting": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["system", "snapAnchorMm"],
+      "properties": {
+        "system": { "enum": ["openGrid", "underware"] },
+        "snapAnchorMm": { "$ref": "#/$defs/point2d" },
+        "attachmentPointsMm": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/identifiedPoint2d" }
+        }
+      }
+    },
+    "port": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "positionMm", "directionDeg"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "kind": { "enum": ["cable"] },
+        "positionMm": { "$ref": "#/$defs/point2d" },
+        "directionDeg": { "enum": [0, 90, 180, 270] }
+      }
+    },
+    "capabilities": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["renderer", "sizing", "print", "capacity"],
+      "properties": {
+        "renderer": { "const": "svg/v1" },
+        "sizing": { "const": "fixed/v1" },
+        "print": { "const": "components/v1" },
+        "capacity": { "enum": ["none/v1", "system-cable/v1"] }
+      }
+    },
+    "visual": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "coordinateSpace", "viewBoxMm", "svg"],
+      "properties": {
+        "type": { "const": "svg" },
+        "coordinateSpace": { "const": "physical-mm" },
+        "viewBoxMm": {
+          "description": "Must equal [0, 0, physical.sizeMm.x, physical.sizeMm.y]; enforced semantically.",
+          "type": "array",
+          "prefixItems": [
+            { "const": 0 },
+            { "const": 0 },
+            { "type": "number", "exclusiveMinimum": 0 },
+            { "type": "number", "exclusiveMinimum": 0 }
+          ],
+          "items": false,
+          "minItems": 4,
+          "maxItems": 4
+        },
+        "svg": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100000,
+          "contentMediaType": "image/svg+xml"
+        }
+      }
+    },
+    "print": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["components"],
+      "properties": {
+        "components": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 20,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "name", "quantity", "sizeMm"],
+            "properties": {
+              "id": { "type": "string", "minLength": 1, "maxLength": 80 },
+              "name": { "type": "string", "minLength": 1, "maxLength": 120 },
+              "quantity": { "type": "integer", "minimum": 1, "maximum": 1000 },
+              "sizeMm": { "$ref": "#/$defs/positiveSize" },
+              "fileName": { "type": "string", "maxLength": 255 },
+              "artifactSha256": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

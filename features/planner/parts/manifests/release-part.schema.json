@@ -1,0 +1,103 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://underware-simulator.example/schemas/release-part-v1alpha1.schema.json",
+  "title": "Underware Simulator release planning part v1alpha1",
+  "description": "A release-owned, grid-derived planning template. It is not an immutable printable variant until exact X/Y/Z dimensions and an SVG are supplied through underware.parts/v1alpha1.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "apiVersion",
+    "catalog",
+    "provenance",
+    "physical",
+    "capabilities",
+    "placement",
+    "appearance",
+    "print"
+  ],
+  "properties": {
+    "$schema": { "type": "string" },
+    "apiVersion": { "const": "underware.release-part/v1alpha1" },
+    "catalog": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "kind",
+        "name",
+        "icon",
+        "category",
+        "description",
+        "widthCells",
+        "heightCells"
+      ],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{2,127}$" },
+        "kind": { "enum": ["grid", "channel", "cable-loop", "holder", "power-brick", "part"] },
+        "name": { "type": "string", "minLength": 1 },
+        "icon": { "type": "string", "minLength": 1 },
+        "category": { "type": "string", "minLength": 1 },
+        "description": { "type": "string", "minLength": 1 },
+        "widthCells": { "type": "number", "exclusiveMinimum": 0 },
+        "heightCells": { "type": "number", "exclusiveMinimum": 0 },
+        "featured": { "type": "boolean" }
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sourceUrl", "license"],
+      "properties": {
+        "sourceUrl": { "type": "string", "format": "uri" },
+        "license": { "type": "string", "minLength": 1 }
+      }
+    },
+    "physical": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["units", "sizing", "printReadiness"],
+      "properties": {
+        "units": { "const": "mm" },
+        "sizing": { "const": "grid-derived" },
+        "printReadiness": { "const": "generator-required" }
+      }
+    },
+    "capabilities": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["renderer"],
+      "properties": {
+        "renderer": {
+          "enum": [
+            "grid/v1",
+            "channel/l/v1",
+            "channel/t/v1",
+            "channel/x/v1",
+            "channel/s/v1",
+            "cable-loop/v1",
+            "holder/v1",
+            "power-brick/v1"
+          ]
+        },
+        "inspectors": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "grid-coverage/v1",
+              "channel-capacity/v1",
+              "power-brick-outlets/v1"
+            ]
+          }
+        }
+      }
+    },
+    "defaults": { "type": "object" },
+    "availability": { "type": "object" },
+    "placement": { "type": "object" },
+    "appearance": { "type": "object" },
+    "print": { "type": "object" },
+    "tool": { "type": "string" },
+    "legacyKind": { "type": "string" }
+  }
+}

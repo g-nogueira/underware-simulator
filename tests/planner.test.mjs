@@ -16,6 +16,7 @@ import {
   removeRouteBend,
   reorderLayerStack,
   resizeItemFromCorner,
+  rotateFootprintPoint,
   snapToGrid,
   translateRoute,
   validatePlanFile,
@@ -24,6 +25,23 @@ import {
 test("snaps placement to the active physical grid", () => {
   assert.equal(snapToGrid(83, 28), 84);
   assert.equal(snapToGrid(88, 25), 100);
+});
+
+test("rotates a millimetre mounting anchor without changing physical scale", () => {
+  const anchor = { x: 14, y: 13.6 };
+  assert.deepEqual(rotateFootprintPoint(anchor, 140.01, 27.2, 0), anchor);
+  assert.deepEqual(rotateFootprintPoint(anchor, 140.01, 27.2, 90), {
+    x: 13.6,
+    y: 14,
+  });
+  assert.deepEqual(rotateFootprintPoint(anchor, 140.01, 27.2, 180), {
+    x: 126.01,
+    y: 13.6,
+  });
+  assert.deepEqual(rotateFootprintPoint(anchor, 140.01, 27.2, 270), {
+    x: 13.6,
+    y: 126.01,
+  });
 });
 
 test("keeps a snapped part inside the desk", () => {
@@ -486,6 +504,50 @@ test("honours an injected channel definition that opts out of capacity", () => {
   assert.deepEqual(result.overCapacityIds, []);
 });
 
+test("uses pinned manifest components for the exact print list", () => {
+  const definitionHash = `sha256:${"a".repeat(64)}`;
+  const result = calculatePrintPlan(
+    [
+      {
+        id: "custom",
+        kind: "part",
+        name: "Pinned clamp",
+        catalogId: "makerworld.clamp",
+        partDefinition: definitionHash,
+        width: 42,
+        height: 18,
+      },
+    ],
+    "openGrid",
+    [
+      {
+        id: "makerworld.clamp",
+        definitionHash,
+        name: "Clamp",
+        strategy: "components",
+        capacity: "none",
+        components: [
+          {
+            id: "clamp-half",
+            name: "Clamp half",
+            quantity: 2,
+            sizeMm: { x: 42, y: 18, z: 12 },
+          },
+        ],
+      },
+    ],
+  );
+
+  assert.equal(result.partsCount, 2);
+  assert.deepEqual(result.groups, [
+    {
+      label: "Clamp half · 42 × 18 × 12 mm",
+      count: 2,
+      catalogId: "makerworld.clamp",
+    },
+  ]);
+});
+
 test("reorders items and routes in one shared layer stack", () => {
   const items = [
     { id: "grid", layer: 0 },
@@ -553,6 +615,55 @@ test("rejects malformed imported plans", () => {
           y: 0,
           width: Number.MAX_VALUE,
           height: 224,
+        },
+      ],
+      routes: [],
+    }).ok,
+    false,
+  );
+  const definitionHash = `sha256:${"b".repeat(64)}`;
+  assert.equal(
+    validatePlanFile({
+      version: 2,
+      system: "openGrid",
+      desk: { width: 1600, depth: 800 },
+      partDefinitions: { [definitionHash]: {} },
+      items: [
+        {
+          id: "manifest-part",
+          kind: "part",
+          name: "Manifest part",
+          catalogId: "makerworld.part",
+          partDefinition: definitionHash,
+          x: 0,
+          y: 0,
+          width: 40,
+          height: 20,
+          rotation: 0,
+        },
+      ],
+      routes: [],
+    }).ok,
+    true,
+  );
+  assert.equal(
+    validatePlanFile({
+      version: 2,
+      system: "openGrid",
+      desk: { width: 1600, depth: 800 },
+      partDefinitions: {},
+      items: [
+        {
+          id: "missing-definition",
+          kind: "part",
+          name: "Missing",
+          catalogId: "makerworld.part",
+          partDefinition: definitionHash,
+          x: 0,
+          y: 0,
+          width: 40,
+          height: 20,
+          rotation: 0,
         },
       ],
       routes: [],

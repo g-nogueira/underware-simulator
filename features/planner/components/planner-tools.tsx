@@ -1,7 +1,13 @@
+"use client";
+
+import { useState } from "react";
+
 import { TOOLS } from "../model/catalog";
 import { usePlanner } from "../application/planner-provider";
+import { PartManifestEditor } from "./part-manifest-editor";
 
 export function PlannerTools() {
+  const [manifestEditorOpen, setManifestEditorOpen] = useState(false);
   const {
     partCatalog,
     activeTool,
@@ -61,6 +67,17 @@ export function PlannerTools() {
             Schematic planning parts based on the official Underware and
             openGrid customizers.
           </p>
+          <button
+            type="button"
+            className="catalog-manifest-action"
+            onClick={() => setManifestEditorOpen(true)}
+          >
+            <span aria-hidden="true">{`{ }`}</span>
+            <strong>Import JSON / advanced mode</strong>
+            <small>
+              Add a fixed-size MakerWorld or local model with an inline SVG.
+            </small>
+          </button>
           {categories.map((category) => (
               <section key={category}>
                 <h3>{category}</h3>
@@ -87,6 +104,10 @@ export function PlannerTools() {
             ))}
         </aside>
       )}
+      <PartManifestEditor
+        open={manifestEditorOpen}
+        onClose={() => setManifestEditorOpen(false)}
+      />
     </>
   );
 }

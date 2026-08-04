@@ -1,0 +1,33 @@
+{
+  "$schema": "./release-part.schema.json",
+  "apiVersion": "underware.release-part/v1alpha1",
+  "catalog": {
+    "id": "cable-loop",
+    "kind": "cable-loop",
+    "name": "Cable loop",
+    "icon": "◯",
+    "category": "Cable routing",
+    "description": "A resizable planning template for a generated cable-loop holder.",
+    "widthCells": 2,
+    "heightCells": 2
+  },
+  "provenance": {
+    "sourceUrl": "https://github.com/AndyLevesque/QuackWorks/blob/main/Underware/Underware_Cable_Loop_holder.scad",
+    "license": "CC-BY-NC-SA-4.0; verify generated dimensions"
+  },
+  "physical": {
+    "units": "mm",
+    "sizing": "grid-derived",
+    "printReadiness": "generator-required"
+  },
+  "capabilities": { "renderer": "cable-loop/v1" },
+  "availability": { "systems": ["openGrid", "underware"] },
+  "placement": {
+    "grid": "active-system",
+    "layer": "front",
+    "resizing": "free"
+  },
+  "appearance": { "shadow": true },
+  "print": { "strategy": "single", "capacity": "none" },
+  "legacyKind": "cable-loop"
+}

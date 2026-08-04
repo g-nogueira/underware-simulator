@@ -31,6 +31,8 @@ export type PlannerItem = {
   cables?: number;
   outlets?: number;
   catalogId?: CatalogItemId;
+  /** Immutable manifest snapshot reference for data-defined printable parts. */
+  partDefinition?: `sha256:${string}`;
   layer?: number;
   maxTileCellsX?: number;
   maxTileCellsY?: number;
@@ -45,8 +47,7 @@ export type CableRoute = {
   layer?: number;
 };
 
-export type PlanFile = {
-  version: 1;
+type PlanFileBase = {
   name: string;
   system: SystemId;
   desk: { width: number; depth: number };
@@ -54,6 +55,15 @@ export type PlanFile = {
   routes: CableRoute[];
   savedAt?: string;
 };
+
+export type LegacyPlanFile = PlanFileBase & { version: 1 };
+
+export type CurrentPlanFile = PlanFileBase & {
+  version: 2;
+  partDefinitions: Record<string, unknown>;
+};
+
+export type PlanFile = LegacyPlanFile | CurrentPlanFile;
 
 export type PlanSnapshot = Pick<
   PlanFile,

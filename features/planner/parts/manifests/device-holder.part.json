@@ -1,0 +1,34 @@
+{
+  "$schema": "./release-part.schema.json",
+  "apiVersion": "underware.release-part/v1alpha1",
+  "catalog": {
+    "id": "device-holder",
+    "kind": "holder",
+    "name": "Device holder",
+    "icon": "⊔",
+    "category": "Mounts",
+    "description": "A resizable planning envelope for a generated device holder.",
+    "widthCells": 5,
+    "heightCells": 3
+  },
+  "provenance": {
+    "sourceUrl": "https://makerworld.com/en/models/783010-underware-2-0-infinite-cable-management",
+    "license": "CC-BY-NC-SA-4.0; verify the generated holder dimensions"
+  },
+  "physical": {
+    "units": "mm",
+    "sizing": "grid-derived",
+    "printReadiness": "generator-required"
+  },
+  "capabilities": { "renderer": "holder/v1" },
+  "availability": { "systems": ["openGrid", "underware"] },
+  "placement": {
+    "grid": "active-system",
+    "layer": "front",
+    "minimumSizeCells": { "width": 3, "height": 2 },
+    "resizing": "free"
+  },
+  "appearance": { "shadow": true },
+  "print": { "strategy": "single", "capacity": "none" },
+  "legacyKind": "holder"
+}

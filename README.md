@@ -18,6 +18,7 @@ questions that are expensive to answer through trial and error:
 - Cable routes with diameter and capacity validation
 - Grouped print list with heuristic time and filament estimates
 - Browser autosave and JSON import/export
+- Build-time and device-local JSON part manifests with exact-size SVG previews
 - Undo/redo and keyboard shortcuts
 - Exportable structured diagnostic trace
 
@@ -41,8 +42,8 @@ The planner is a vertical feature under `features/planner`:
 The sibling `lib/planner.mjs` module remains the framework-independent geometry,
 validation, and print-plan engine covered by Node tests.
 
-`PlannerPage` is the composition root. It injects a `PartRegistry` into the
-planner rather than letting application code import built-in parts. Each part
+`PlannerPage` is the composition root. It injects a `PartLibrary` whose narrow
+`PartRegistry` interface is consumed by the planner. Each part
 definition composes catalogue metadata, defaults, placement/resize rules,
 rendering, optional inspector sections, availability, and print behaviour.
 Adding a shape with existing behaviours is therefore one definition; a shape
@@ -54,6 +55,29 @@ The facade exposes read-only state and named operations such as
 `addCatalogItem`, `updateSelected`, `moveSelectionLayer`, and
 `openPrintPlan`. React setters, undo stacks, trace storage, and mutable pointer
 refs remain behind the application boundary.
+
+## JSON part manifests
+
+Open **+ Parts → Import JSON / advanced mode** to paste or upload a
+`underware.parts/v1alpha1` manifest. An SVG file can also be inserted into the
+current JSON draft; the final manifest remains one self-contained file. The editor validates exact X/Y/Z
+millimetres, mounting anchors, permitted rotations, print-component sizes,
+provenance, licence state, finite capabilities, and a restricted inline SVG.
+
+Accepted manifests are content-addressed with SHA-256 and stored on the current
+device. Editing creates a new immutable revision: existing placed parts retain
+their old dimensions and rendering. Exported plan v2 files embed every
+referenced revision once, so importing the plan does not depend on a live model
+page or the recipient already having that part installed.
+
+Every release catalogue entry is stored as JSON under
+`features/planner/parts/manifests/`. Exact printable variants use the same
+validation and compilation path as runtime imports. Existing resizable tools
+whose final Z/model output depends on an external generator are explicitly
+marked `grid-derived` and `generator-required`; their JSON selects only finite,
+app-owned renderer and inspector capabilities and does not pretend that a
+schematic footprint is an immutable printable file. See the worked manifest and
+JSON Schema under `spikes/json-parts/`.
 
 This is deliberately lightweight inversion of control, not a plugin framework
 or dependency-injection container. A genuinely new domain concept (for example,

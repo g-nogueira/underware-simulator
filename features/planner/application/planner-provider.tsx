@@ -6,7 +6,7 @@ import {
   type ReactNode,
 } from "react";
 
-import type { PartRegistry } from "../parts/contracts";
+import type { PartLibrary, PartRegistry } from "../parts/contracts";
 import {
   usePlannerController,
   type PlannerFacade,
@@ -14,22 +14,33 @@ import {
 
 const PlannerContext = createContext<PlannerFacade | null>(null);
 const PartRegistryContext = createContext<PartRegistry | null>(null);
+const PartLibraryContext = createContext<PartLibrary | null>(null);
 
 export function PlannerProvider({
   children,
-  partRegistry,
+  partLibrary,
 }: {
   children: ReactNode;
-  partRegistry: PartRegistry;
+  partLibrary: PartLibrary;
 }) {
-  const facade = usePlannerController(partRegistry);
+  const facade = usePlannerController(partLibrary);
   return (
-    <PartRegistryContext.Provider value={partRegistry}>
-      <PlannerContext.Provider value={facade}>
-        {children}
-      </PlannerContext.Provider>
-    </PartRegistryContext.Provider>
+    <PartLibraryContext.Provider value={partLibrary}>
+      <PartRegistryContext.Provider value={partLibrary.registry}>
+        <PlannerContext.Provider value={facade}>
+          {children}
+        </PlannerContext.Provider>
+      </PartRegistryContext.Provider>
+    </PartLibraryContext.Provider>
   );
+}
+
+export function usePartLibrary() {
+  const library = useContext(PartLibraryContext);
+  if (!library) {
+    throw new Error("usePartLibrary must be used inside PlannerProvider");
+  }
+  return library;
 }
 
 export function usePlanner() {

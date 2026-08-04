@@ -81,29 +81,30 @@ export function ItemLayer({ item }: { item: PlannerItem }) {
             rx="16"
             className="selection-outline"
           />
-          {[
-            ["nw", item.x - 6, item.y - 6],
-            ["ne", item.x + item.width + 6, item.y - 6],
-            ["sw", item.x - 6, item.y + item.height + 6],
-            ["se", item.x + item.width + 6, item.y + item.height + 6],
-          ].map(([corner, x, y]) => (
-            <rect
-              key={corner}
-              x={Number(x) - 7}
-              y={Number(y) - 7}
-              width="14"
-              height="14"
-              className={`selection-handle resize-${corner}`}
-              onPointerDown={(event) =>
-                handleResizePointerDown(
-                  event,
-                  item,
-                  corner as ResizeCorner,
-                )
-              }
-              aria-label={`Resize ${item.name} from ${corner} corner`}
-            />
-          ))}
+          {partRegistry.canResize(item) &&
+            [
+              ["nw", item.x - 6, item.y - 6],
+              ["ne", item.x + item.width + 6, item.y - 6],
+              ["sw", item.x - 6, item.y + item.height + 6],
+              ["se", item.x + item.width + 6, item.y + item.height + 6],
+            ].map(([corner, x, y]) => (
+              <rect
+                key={corner}
+                x={Number(x) - 7}
+                y={Number(y) - 7}
+                width="14"
+                height="14"
+                className={`selection-handle resize-${corner}`}
+                onPointerDown={(event) =>
+                  handleResizePointerDown(
+                    event,
+                    item,
+                    corner as ResizeCorner,
+                  )
+                }
+                aria-label={`Resize ${item.name} from ${corner} corner`}
+              />
+            ))}
         </>
       )}
     </g>

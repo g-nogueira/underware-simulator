@@ -1,0 +1,38 @@
+{
+  "$schema": "./release-part.schema.json",
+  "apiVersion": "underware.release-part/v1alpha1",
+  "catalog": {
+    "id": "power-brick-mount",
+    "kind": "power-brick",
+    "name": "Power brick mount",
+    "icon": "▯",
+    "category": "Mounts",
+    "description": "A resizable planning envelope for a generated brick or power-strip holder.",
+    "widthCells": 7,
+    "heightCells": 3
+  },
+  "provenance": {
+    "sourceUrl": "https://github.com/AndyLevesque/QuackWorks/blob/main/Underware/Underware_Item_Holder.scad",
+    "license": "CC-BY-NC-SA-4.0; verify the generated holder dimensions"
+  },
+  "physical": {
+    "units": "mm",
+    "sizing": "grid-derived",
+    "printReadiness": "generator-required"
+  },
+  "capabilities": {
+    "renderer": "power-brick/v1",
+    "inspectors": ["power-brick-outlets/v1"]
+  },
+  "defaults": { "outlets": 6 },
+  "availability": { "systems": ["openGrid", "underware"] },
+  "placement": {
+    "grid": "active-system",
+    "layer": "front",
+    "minimumSizeCells": { "width": 3, "height": 2 },
+    "resizing": "free"
+  },
+  "appearance": { "shadow": true },
+  "print": { "strategy": "single", "capacity": "none" },
+  "legacyKind": "power-brick"
+}

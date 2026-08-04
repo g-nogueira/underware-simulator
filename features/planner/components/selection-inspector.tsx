@@ -46,6 +46,12 @@ export function SelectionInspector() {
     duplicateSelected,
     selectRoute,
   } = planner;
+  const selectedCanResize = selected
+    ? partRegistry.canResize(selected)
+    : false;
+  const selectedRotations = selected
+    ? partRegistry.allowedRotationsFor(selected)
+    : [];
 
   return (
     <>
@@ -285,7 +291,9 @@ export function SelectionInspector() {
                       type="number"
                       min="1"
                       value={selected.width}
+                      readOnly={!selectedCanResize}
                       onChange={(event) =>
+                        selectedCanResize &&
                         updateSelected({
                           width: Math.max(1, Number(event.target.value) || 1),
                         })
@@ -301,7 +309,9 @@ export function SelectionInspector() {
                       type="number"
                       min="1"
                       value={selected.height}
+                      readOnly={!selectedCanResize}
                       onChange={(event) =>
+                        selectedCanResize &&
                         updateSelected({
                           height: Math.max(1, Number(event.target.value) || 1),
                         })
@@ -311,12 +321,17 @@ export function SelectionInspector() {
                   </span>
                 </label>
               </div>
+              {!selectedCanResize && (
+                <p className="fixed-size-note">
+                  Locked to the manifest&apos;s exact printable footprint.
+                </p>
+              )}
             </section>
 
             <section className="inspector-section">
               <h2>Rotation</h2>
               <div className="rotation-options">
-                {([0, 90, 180, 270] as const).map((rotation) => (
+                {selectedRotations.map((rotation) => (
                   <button
                     type="button"
                     key={rotation}

@@ -62,15 +62,19 @@ test("injects part composition through an application-owned interface", async ()
     "features/planner/application/use-planner-controller.ts",
   );
 
-  assert.match(page, /partRegistry=\{DEFAULT_PART_REGISTRY\}/);
-  assert.match(provider, /partRegistry: PartRegistry/);
-  assert.match(controller, /usePlannerController\(partRegistry: PartRegistry\)/);
+  assert.match(page, /const partLibrary = usePartLibrary\(\)/);
+  assert.match(page, /partLibrary=\{partLibrary\}/);
+  assert.match(provider, /partLibrary: PartLibrary/);
+  assert.match(controller, /usePlannerController\(partLibrary: PartLibrary\)/);
   assert.doesNotMatch(controller, /built-in-parts|BUILT_IN_PARTS|PART_CATALOG/);
 });
 
 test("composes each part from metadata, behaviour, and presentation", async () => {
   const contracts = await source("features/planner/parts/contracts.ts");
   const builtIns = await source("features/planner/parts/built-in-parts.tsx");
+  const buildTime = await source(
+    "features/planner/parts/build-time-manifests.ts",
+  );
   const registry = await source("features/planner/parts/part-registry.ts");
 
   for (const contract of [
@@ -83,6 +87,11 @@ test("composes each part from metadata, behaviour, and presentation", async () =
     assert.match(contracts, new RegExp(contract.replace("?", "\\?")));
   }
   assert.match(builtIns, /createPartRegistry\(BUILT_IN_PARTS\)/);
+  assert.match(builtIns, /RELEASE_PART_MANIFESTS\.map/);
+  assert.match(builtIns, /BUILD_TIME_MANIFESTS\.map/);
+  assert.doesNotMatch(builtIns, /catalog:\s*\{/);
+  assert.doesNotMatch(builtIns, /definePart\(\{/);
+  assert.match(buildTime, /\.part\.json/g);
   assert.match(registry, /Duplicate part definition/);
   assert.match(registry, /minimumSizeFor/);
 });
@@ -100,14 +109,48 @@ test("keeps catalogue identifiers and categories open for extension", async () =
 test("supports exact printable footprints outside whole grid cells", async () => {
   const types = await source("features/planner/model/types.ts");
   const registry = await source("features/planner/parts/part-registry.ts");
-  const builtIns = await source("features/planner/parts/built-in-parts.tsx");
+  const straightChannel = JSON.parse(
+    await source(
+      "features/planner/parts/manifests/straight-channel.part.json",
+    ),
+  );
 
   assert.match(types, /footprintMm\?: \{ width: number; height: number \}/);
   assert.match(registry, /catalog\.footprintMm\?\.width/);
   assert.match(registry, /catalog\.footprintMm\?\.height/);
-  assert.match(
-    builtIns,
-    /footprintMm: \{ width: 140\.01, height: 27\.2 \}/,
+  assert.deepEqual(straightChannel.physical.sizeMm, {
+    x: 140.01,
+    y: 27.2,
+    z: 22.4,
+  });
+});
+
+test("keeps every release catalogue entry in a JSON manifest", async () => {
+  const manifestRoot = path.join(
+    root,
+    "features/planner/parts/manifests",
+  );
+  const manifestFiles = (await readdir(manifestRoot))
+    .filter((name) => name.endsWith(".part.json"))
+    .sort();
+  const manifests = await Promise.all(
+    manifestFiles.map(async (name) =>
+      JSON.parse(await readFile(path.join(manifestRoot, name), "utf8")),
+    ),
+  );
+  const ids = manifests.map((manifest) => manifest.id ?? manifest.catalog?.id);
+
+  assert.equal(manifestFiles.length, 9);
+  assert.equal(new Set(ids).size, manifestFiles.length);
+  assert.ok(manifests.every((manifest) => manifest.physical?.units === "mm"));
+  assert.ok(
+    manifests.every(
+      (manifest) =>
+        manifest.apiVersion === "underware.parts/v1alpha1" ||
+        (manifest.apiVersion === "underware.release-part/v1alpha1" &&
+          manifest.physical.sizing === "grid-derived" &&
+          manifest.physical.printReadiness === "generator-required"),
+    ),
   );
 });
 
@@ -123,7 +166,12 @@ test("keeps concrete part IDs out of planner core", async () => {
   for (const entry of entries) {
     if (!entry.isFile() || !/\.(?:ts|tsx)$/.test(entry.name)) continue;
     const filePath = path.join(entry.parentPath, entry.name);
-    if (filePath.endsWith(path.join("parts", "built-in-parts.tsx"))) continue;
+    if (
+      filePath.endsWith(path.join("parts", "built-in-parts.tsx")) ||
+      filePath.endsWith(path.join("parts", "build-time-manifests.ts"))
+    ) {
+      continue;
+    }
     assert.doesNotMatch(await readFile(filePath, "utf8"), concreteIds, filePath);
   }
 });
